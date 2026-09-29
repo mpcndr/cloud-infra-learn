@@ -39,8 +39,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 @media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 18px; } }
 
 /* rail */
-.rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); display: grid; gap: 14px; }
-@media (max-width: 860px) { .rail { position: static; } }
+.rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); display: grid; gap: 14px; max-height: calc(100vh - 32px); overflow-y: auto; overscroll-behavior: contain; }
+@media (max-width: 860px) { .rail { position: static; max-height: none; overflow: visible; } }
 .brand { font-family: var(--f-display); font-weight: 700; font-size: 1.35rem; letter-spacing: .01em; line-height: 1.2; }
 .brand small { display: block; font-family: var(--f-mono); font-weight: 400; font-size: .72rem; color: var(--muted); letter-spacing: .04em; margin-top: 4px; }
 .lessons { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
@@ -48,6 +48,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 .lessons button:hover:not(:disabled) { background: var(--accent-soft); }
 .lessons button[aria-current="true"] { border-left-color: var(--accent); background: var(--accent-soft); }
 .lessons button:disabled { color: var(--muted); cursor: default; }
+.lessons .group { font-family: var(--f-mono); font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); padding: 12px 12px 4px; }
+.lessons .group:first-child { padding-top: 0; }
 .lessons .code { font-family: var(--f-mono); font-size: .72rem; color: var(--muted); letter-spacing: .05em; }
 .lessons .name { font-size: .92rem; line-height: 1.45; }
 .lessons .count { font-family: var(--f-mono); font-size: .7rem; color: var(--warn); }
@@ -231,9 +233,794 @@ const COURSE = [
       { id: "c3", tag: "challenge 4", q: "รัน app ที่ port 80 ด้วย user ปกติ ได้ error อะไร เพราะอะไร และมีวิธีไหนที่ไม่ต้องรันเป็น root" }
     ]
   },
-  { id: "L02", code: "LESSON 02", locked: true, title: "ทำไมปิด terminal แล้ว app ตาย" },
-  { id: "L03", code: "LESSON 03", locked: true, title: "Linux: user, permission, filesystem" },
-  { id: "L04", code: "LESSON 04", locked: true, title: "IP, subnet และ packet เดินทางอย่างไร" }
+  {
+    id: "L02", code: "LESSON 02", phase: "Phase 0 · Computer & Internet",
+    title: "ข้างในเครื่องมีอะไร: CPU, RAM, Disk และ Kernel",
+    lede: "“เว็บช้า” ไม่ได้บอกอะไร จนกว่าจะรู้ว่าช้าเพราะคำนวณหรือช้าเพราะรอ บทนี้ทำให้เห็นทรัพยากรแต่ละตัว และรู้ว่าอะไรช้ากว่าอะไรกี่เท่า",
+    source: "lessons/02-inside-the-machine/README.md",
+    overview: `
+      <ul>
+        <li><b>CPU core</b> ทำงานคำนวณจริงได้ทีละอย่าง kernel สลับงานเร็ว ๆ ให้ดูเหมือนพร้อมกัน (scheduler)</li>
+        <li><b>CPU-bound</b> ช้าเพราะคิด · <b>I/O-bound</b> ช้าเพราะรอ DB, disk, network — web app ส่วนใหญ่เป็นแบบหลัง</li>
+        <li><b>RAM</b> เร็วแต่หายเมื่อ process ตาย · <b>Disk</b> ช้ากว่าแต่อยู่รอด</li>
+        <li>process แตะ hardware เองไม่ได้ ต้องขอ kernel ผ่าน <b>system call</b> ทั้งเพื่อแบ่งทรัพยากรและเพื่อความปลอดภัย</li>
+        <li><b>“CPU ต่ำ + ช้า” = กำลังรอ</b> เพิ่ม CPU ไม่ช่วย</li>
+      </ul>
+      <div class="caveat">ลำดับขนาดที่ต้องจำ: RAM ~100ns · SSD ~100µs · ไปกลับใน data center ~0.5ms · ข้ามทวีป ~200ms network ช้ากว่า CPU เป็นล้านเท่า</div>`,
+    diagram:
+`<span class="c"> user space:  pixbin   postgres   nginx   (memory ของใครของมัน)</span>
+ ─────────────────── system call ───────────────────
+<span class="c"> kernel:      scheduler · memory · filesystem · network</span>
+                CPU cores   RAM      Disk      NIC
+               (เร็วสุด)   ~100ns   ~100µs   ~0.5ms–200ms`,
+    lab: [
+      { id: "s1", title: "build และนับ core", cmd: "cd cloud-infra-learn/pixbin\ngo build -o pixbin .\nsysctl -n hw.ncpu", note: "จำนวน core = C" },
+      { id: "s2", title: "วัดงาน CPU ชิ้นเดียว", cmd: "./pixbin            # T1\ncurl \"localhost:8000/work/cpu?n=3000\"", note: "จดเวลา = T" },
+      { id: "s3", title: "ยิงพร้อมกัน C และ 2C ตัว", cmd: "time (for i in $(seq 8); do curl -s \"localhost:8000/work/cpu?n=3000\" & done; wait)", note: "ทำนายก่อนรัน ดู %CPU ใน Activity Monitor ระหว่างรัน" },
+      { id: "s4", title: "ยิงงานรอ 100 ตัว", cmd: "time (for i in $(seq 100); do curl -s \"localhost:8000/work/sleep?ms=1000\" >/dev/null & done; wait)", note: "ทำนายก่อน: ใช้กี่วินาที CPU ขึ้นไหม" },
+      { id: "s5", title: "ดู RSS เพิ่มจาก memory leak", cmd: "ps -o pid,rss,command -p $(pgrep pixbin)\ncurl \"localhost:8000/work/mem?mb=200\"", note: "RSS ลดลงเองไหม" },
+      { id: "s6", title: "RAM หาย ไฟล์ไม่หาย", cmd: "echo hello | curl --data-binary @- localhost:8000/upload\n# Ctrl+C แล้วรันใหม่\ncurl localhost:8000/files", note: "" }
+    ],
+    labSubmit: [
+      { id: "lab3", tag: "lab · ข้อ 3", q: "วางผล time ของการยิง C และ 2C ตัว พร้อมค่าที่ทำนายไว้ แล้วอธิบายความต่าง", mono: true },
+      { id: "lab4", tag: "lab · ข้อ 4", q: "วางผลข้อ 4 และอธิบายว่าทำไม 100 request ที่รอคนละ 1 วินาทีจึงเสร็จเร็ว และ CPU ไม่ขึ้น", mono: true }
+    ],
+    mcq: [
+      { id: "m1", q: "เครื่อง 4 core ยิงงาน CPU 8 ชิ้นพร้อมกัน แต่ละชิ้นใช้ 1 วินาทีเมื่อรันเดี่ยว ๆ ทั้งหมดเสร็จในประมาณเท่าไร",
+        opts: ["1 วินาที", "2 วินาที", "8 วินาที", "0.5 วินาที"], a: 1,
+        hints: ["มี 8 งาน แต่ทำงานคำนวณจริงพร้อมกันได้กี่งาน", "งานทั้งหมดรวมกันคือ 8 core-วินาที หารด้วยจำนวน core"],
+        why: "งานรวม 8 core-วินาที เครื่องมี 4 core จึงใช้ประมาณ 2 วินาที แต่ละ request ช้าลงเพราะแย่ง core กัน" },
+      { id: "m2", q: "ยิง /work/sleep?ms=1000 พร้อมกัน 100 ตัว ทั้งหมดเสร็จในประมาณเท่าไร",
+        opts: ["100 วินาที", "25 วินาที", "ประมาณ 1 วินาที", "10 วินาที"], a: 2,
+        hints: ["ระหว่าง sleep process ใช้ CPU ไหม", "งานที่รอ ไม่ต้องต่อคิว core"],
+        why: "การรอไม่ใช้ CPU ทั้ง 100 request จึงรอไปพร้อมกันได้ เสร็จในประมาณ 1 วินาที นี่คือเหตุผลที่ server หนึ่งเครื่องรับ request ที่รอ DB ได้จำนวนมาก" },
+      { id: "m3", q: "API ช้า 5 วินาที แต่ top แสดงว่า CPU ของ app ใช้แค่ 3% สาเหตุที่เป็นไปได้มากที่สุดคือ",
+        opts: ["CPU ไม่พอ", "app กำลังรออะไรบางอย่าง เช่น DB หรือ API ภายนอก", "RAM เหลือมากเกินไป", "จำนวน core น้อยไป"], a: 1,
+        hints: ["ถ้าช้าเพราะคำนวณ CPU ควรเป็นเท่าไร", "CPU ต่ำแต่ช้า แปลว่าเวลาหายไปที่ไหน"],
+        why: "CPU ต่ำ + ช้า = กำลังรอ เพิ่ม CPU ไม่ช่วย ต้องหาว่ารออะไร" },
+      { id: "m4", q: "อ่าน RAM (~100ns) กับส่ง packet ไปกลับใน data center เดียวกัน (~0.5ms) ต่างกันประมาณกี่เท่า",
+        opts: ["5 เท่า", "50 เท่า", "5,000 เท่า", "เท่ากัน"], a: 2,
+        hints: ["แปลงให้เป็นหน่วยเดียวกันก่อน 0.5ms = กี่ ns", "0.5ms = 500,000ns"],
+        why: "500,000 ÷ 100 = 5,000 เท่า การเรียกข้าม network แม้แต่ใน data center เดียวกันจึงแพงมากเมื่อเทียบกับทำใน memory" }
+    ],
+    quiz: [
+      { id: "q1", tag: "เข้าใจ", q: "ทำไม process ถึงแตะ disk หรือ network card ตรง ๆ ไม่ได้ ต้องผ่าน kernel ตอบทั้งด้านการแบ่งทรัพยากรและด้านความปลอดภัย" },
+      { id: "q2", tag: "ประยุกต์", q: "เครื่อง 2 core รับ request ที่ใช้ CPU 200ms เข้ามาพร้อมกัน 20 ตัว request สุดท้ายเสร็จเมื่อไร ถ้าเปลี่ยนเป็น request ที่รอ DB 200ms คำตอบเปลี่ยนอย่างไร" },
+      { id: "q3", tag: "debugging", q: "API ช้า 5 วินาที top แสดง CPU ของ app 3% คุณจะไม่ทำอะไร และจะตรวจอะไรต่อ" },
+      { id: "q4", tag: "architecture", q: "เก็บ session ไว้ใน memory ของ app ทำงานดี จนเพิ่ม server เป็น 2 เครื่องแล้ว user โดน logout แบบสุ่ม อธิบายว่าเกิดอะไรขึ้น" },
+      { id: "q5", tag: "trade-off", q: "งานย่อรูป (CPU-bound) กับ API ที่รอ DB (I/O-bound) ควรรันบน server ชุดเดียวกันไหม คิดจากผล lab ข้อ 3" }
+    ],
+    challenge: [
+      { id: "c1", tag: "challenge 1", q: "หาจุดอิ่มตัวของ pixbin: ยิง CPU พร้อมกัน 1, C, 2C, 4C ตัว บันทึกเวลาเฉลี่ยต่อ request เป็นตาราง แล้วอธิบายรูปแบบ", mono: true },
+      { id: "c2", tag: "challenge 2", q: "ยิง /work/cpu 2C ตัวพร้อมกับ curl localhost:8000/ ตัวเดียว หน้าแรกช้าลงไหม เพราะอะไร และบอกอะไรเกี่ยวกับการให้ request หนักกับเบาใช้ server ร่วมกัน" },
+      { id: "c3", tag: "challenge 3", q: "request ปกติใช้ CPU 20ms บน server 2 vCPU รับได้สูงสุดกี่ request/วินาทีแบบหยาบ ๆ และทำไมตัวเลขจริงจะน้อยกว่า" }
+    ]
+  },
+  {
+    id: "L03", code: "LESSON 03", phase: "Phase 1 · Linux",
+    title: "Process เกิด อยู่ ตายอย่างไร",
+    lede: "ย้ายมาทำงานบน Linux VM จริง และตอบว่าทำไมปิด terminal แล้ว app ตาย ทำไม deploy แบบ kill -9 ถึงทำ user error และเลข exit code บอกอะไร",
+    source: "lessons/03-process-lifecycle/README.md",
+    overview: `
+      <ul>
+        <li>ทุก process มีพ่อ (fork + exec) สืบทอด env, fd 0/1/2, user และ working directory · ต้นตระกูลคือ PID 1 (systemd)</li>
+        <li>fd <code>0</code> stdin · <code>1</code> stdout · <code>2</code> stderr — pixbin เขียน log ออก stderr</li>
+        <li><b>SIGTERM</b> ขอให้ปิดดี ๆ · <b>SIGKILL</b> ตายทันที จัดการไม่ได้ · <b>SIGHUP</b> สายหลุด · <b>SIGINT</b> Ctrl+C</li>
+        <li>exit code <code>128+N</code> = ตายเพราะ signal N → <b>137 = KILL</b> (มักมาจาก OOM), 143 = TERM, 129 = HUP</li>
+        <li>app ที่ดีต้อง <b>graceful shutdown</b> เมื่อได้ SIGTERM: หยุดรับงานใหม่ ทำงานค้างให้จบ แล้วออก</li>
+      </ul>
+      <div class="caveat">Setup: <code>brew install --cask multipass</code> · <code>multipass launch 24.04 --name lab --cpus 2 --memory 2G --disk 10G</code> · <code>multipass mount ~/cloud-infra-learn lab:/home/ubuntu/cloud-infra-learn</code> · build ด้วย <code>GOOS=linux GOARCH=arm64 go build -o pixbin-linux .</code></div>`,
+    diagram:
+`systemd (PID 1)
+ └─ sshd
+     └─ sshd (session ของคุณ)
+         └─ bash
+             └─ pixbin-linux     fd 0,1,2 → /dev/pts/0
+<span class="c"> ปิดหน้าต่าง → SSH หลุด → sshd ส่ง SIGHUP → bash ส่งต่อ → pixbin ตาย (exit 129)</span>`,
+    lab: [
+      { id: "s1", title: "ต้นไม้ process", cmd: "./pixbin-linux                     # V1\nps -ef --forest | grep -B4 pixbin-linux   # V2", note: "PPID ของ pixbin คือใคร" },
+      { id: "s2", title: "แอบดูผ่าน /proc", cmd: "P=$(pgrep -f pixbin-linux)\ngrep -E '^(State|PPid|Threads|VmRSS)' /proc/$P/status\nls -l /proc/$P/fd", note: "หา socket ที่ listen port" },
+      { id: "s3", title: "stdout vs stderr", cmd: "./pixbin-linux > out.log\n./pixbin-linux 2> err.log", note: "log ไปอยู่ที่ไหน ทำไม" },
+      { id: "s4", title: "signal แต่ละแบบ", cmd: "kill -TERM|-INT|-HUP|-KILL $(pgrep -f pixbin-linux)\necho $?     # ใน V1 หลัง pixbin ตาย", note: "กรอกตาราง log + exit code ให้ครบ 4 แถว" },
+      { id: "s5", title: "graceful vs kill -9", cmd: "curl \"localhost:8000/work/sleep?ms=5000\" &\nsleep 1; kill -TERM $(pgrep -f pixbin-linux)", note: "ทำซ้ำด้วย -KILL แล้วดูว่า curl ได้อะไร" },
+      { id: "s6", title: "ปิดหน้าต่าง terminal", cmd: "multipass shell lab\ncd ~/cloud-infra-learn/pixbin && ./pixbin-linux\n# Cmd+W ปิดหน้าต่าง แล้ว pgrep -fa pixbin-linux", note: "ทำซ้ำด้วย nohup ... & แล้วดู PPID" }
+    ],
+    labSubmit: [
+      { id: "lab4", tag: "lab · ข้อ 4", q: "ตาราง signal 4 แบบ: log ที่เห็นและ exit code ของแต่ละแบบ พร้อมอธิบายว่าทำไม TERM ได้ 0 แต่ KILL ได้ 137", mono: true },
+      { id: "lab5", tag: "lab · ข้อ 5", q: "ผลของ curl ตอน TERM เทียบกับตอน KILL และผลกระทบต่อ user ตอน deploy", mono: true },
+      { id: "lab6", tag: "lab · ข้อ 6", q: "ผลตอนปิดหน้าต่างแบบธรรมดาและแบบ nohup พร้อม PPID ของ pixbin หลังปิดหน้าต่าง", mono: true }
+    ],
+    mcq: [
+      { id: "m1", q: "container ตายด้วย exit code 137 หมายความว่าอะไร",
+        opts: ["app เรียก exit(137) เอง", "ถูกฆ่าด้วย SIGKILL (128 + 9)", "ได้ SIGTERM แล้วปิดตัวเอง", "segmentation fault"], a: 1,
+        hints: ["exit code ที่เกิน 128 มีความหมายพิเศษ", "ลบ 128 ออก แล้วดูว่าเป็น signal เลขอะไร"],
+        why: "137 − 128 = 9 คือ SIGKILL มักมาจาก OOM killer หรือ process manager ที่รอ shutdown จนหมดเวลา" },
+      { id: "m2", q: "signal ไหนที่ process ไม่สามารถจัดการเองหรือเพิกเฉยได้",
+        opts: ["SIGTERM", "SIGHUP", "SIGKILL", "SIGINT"], a: 2,
+        hints: ["ต้องมี signal หนึ่งที่รับประกันว่าหยุด process ได้เสมอ", "ตัวที่ kernel ทำเอง ไม่ส่งให้ process ตัดสินใจ"],
+        why: "SIGKILL (และ SIGSTOP) ถูก kernel จัดการโดยตรง process ไม่มีโอกาสตอบสนอง จึงไม่มีโอกาสปิดงานให้เรียบร้อยด้วย" },
+      { id: "m3", q: "รัน ./app > app.log แต่ไฟล์ว่าง และ log ยังขึ้นหน้าจอ สาเหตุคือ",
+        opts: ["app เขียน log ไปที่ stderr (fd 2) ซึ่งไม่ได้ถูก redirect", "disk เต็ม", "ไฟล์ไม่มีสิทธิ์เขียน", "ต้องรอ buffer เต็มก่อน"], a: 0,
+        hints: ["> ส่ง fd ไหนไปที่ไฟล์", "โปรแกรมมีช่องส่งออกมากกว่าหนึ่งช่อง"],
+        why: "> ส่งเฉพาะ stdout (fd 1) log ของ Go เขียน stderr (fd 2) ต้องใช้ 2> หรือ > file 2>&1" },
+      { id: "m4", q: "ปิดหน้าต่าง terminal ที่รัน app อยู่ แล้ว app ตาย เพราะอะไร",
+        opts: ["พ่อตายลูกต้องตายตามเสมอ", "app ได้ SIGHUP แล้วไม่มีโค้ดจัดการ จึงใช้ default คือตาย", "OOM killer", "systemd ฆ่า process ที่ไม่มี terminal"], a: 1,
+        hints: ["ลองนึกว่าเมื่อ SSH หลุด sshd แจ้ง bash อย่างไร", "orphan process ไม่ได้ตายเอง มันถูกส่งไปให้ PID 1 เลี้ยง"],
+        why: "สายหลุด → bash ได้ SIGHUP แล้วส่งต่อให้ job ทุกตัว default ของ SIGHUP คือจบ process ส่วนลูกที่พ่อตายเฉย ๆ จะกลายเป็น orphan ไม่ได้ตาย" }
+    ],
+    quiz: [
+      { id: "q1", tag: "เข้าใจ", q: "ทำไม SIGKILL ถึงไม่ยอมให้ process จัดการเอง ถ้า process ปฏิเสธ SIGKILL ได้จะเกิดปัญหาอะไร" },
+      { id: "q2", tag: "ประยุกต์", q: "container หนึ่งตายด้วย 137 อีกตัวด้วย 143 สองแบบนี้บอกอะไรต่างกัน" },
+      { id: "q3", tag: "debugging", q: "เพื่อนรัน ./app > app.log แล้วบอกว่าไฟล์ว่างแต่ app ทำงานอยู่ ตั้ง hypothesis และพิสูจน์อย่างไรโดยไม่หยุด app" },
+      { id: "q4", tag: "architecture", q: "ออกแบบลำดับขั้นตอน deploy (หยุดตัวเก่า เริ่มตัวใหม่) ที่ทำให้ user ไม่เห็น error เลย ช่วงที่ไม่มีใครฟัง port เกิดตอนไหน" },
+      { id: "q5", tag: "trade-off", q: "ทำไม nohup ถึงไม่พอสำหรับ production ทั้งที่ app ไม่ตายตอนปิด terminal แล้ว" }
+    ],
+    challenge: [
+      { id: "c1", tag: "challenge 1", q: "แก้ pixbin ให้ได้ SIGHUP แล้วแค่ log 'reloading config' ไม่ตาย วางโค้ดส่วนที่แก้และผลพิสูจน์", mono: true },
+      { id: "c2", tag: "challenge 2", q: "สร้าง zombie process ด้วย Go ให้เห็นสถานะ Z ใน ps แล้วทำให้หายโดยไม่แก้โค้ด อธิบายว่าทำไมวิธีนั้นได้ผล", mono: true },
+      { id: "c3", tag: "challenge 3+4", q: "อธิบายว่าทำไม PPID ของ pixbin เปลี่ยนหลัง nohup แล้วปิดหน้าต่าง และผลของการพิมพ์ exit แทนการปิดหน้าต่าง (huponexit)" }
+    ]
+  },
+  {
+    id: "L04", code: "LESSON 04", phase: "Phase 1 · Linux",
+    title: "Filesystem, Users และ Permissions",
+    lede: "process รันในนามของใคร และทำไมคนนั้นไม่ควรเป็น root ถ้า pixbin โดนเจาะ ความเสียหายขึ้นกับสิทธิ์ ไม่ได้ขึ้นกับโค้ด",
+    source: "lessons/04-files-users-permissions/README.md",
+    overview: `
+      <ul>
+        <li>ทุก process ถือ UID/GID · kernel ตรวจสิทธิ์ทุกครั้งที่เปิดไฟล์ · <b>root (UID 0) ข้ามการตรวจ</b></li>
+        <li><code>rwx</code> × owner/group/others · r=4 w=2 x=1 → <code>750</code> = <code>rwxr-x---</code></li>
+        <li><b>บนโฟลเดอร์</b>: w = สร้าง/ลบ/เปลี่ยนชื่อไฟล์ข้างใน · x = เข้าผ่าน · ลบไฟล์ได้ไหมขึ้นกับโฟลเดอร์ ไม่ใช่ไฟล์</li>
+        <li>Least privilege: 1 service = 1 system user · program เป็นของ root · ข้อมูลเป็นของ service</li>
+        <li><code>namei -l &lt;path&gt;</code> แสดงสิทธิ์ทุกชั้นของ path</li>
+      </ul>`,
+    diagram:
+`pixbin process (UID=pixbin)
+  ├─ /var/lib/pixbin/        drwxr-x--- pixbin   ✅ เขียนได้
+  ├─ /usr/local/bin/pixbin   -rwxr-xr-x root     ✅ รัน ❌ แก้
+  ├─ /etc/shadow             -rw-r----- root     ❌
+  └─ /home/ubuntu/           drwxr-x--- ubuntu   ❌
+<span class="c"> โดนเจาะ → คนร้ายได้แค่ ✅</span>`,
+    lab: [
+      { id: "s1", title: "ตัวเองคือใคร", cmd: "id\nls -l /etc/passwd /etc/shadow\ncat /etc/shadow", note: "" },
+      { id: "s2", title: "system user + ติดตั้ง program", cmd: "sudo useradd --system --no-create-home --shell /usr/sbin/nologin pixbin\nsudo install -m 755 ~/cloud-infra-learn/pixbin/pixbin-linux /usr/local/bin/pixbin", note: "" },
+      { id: "s3", title: "โฟลเดอร์ข้อมูล", cmd: "sudo mkdir -p /var/lib/pixbin\nsudo chown pixbin:pixbin /var/lib/pixbin\nsudo chmod 750 /var/lib/pixbin", note: "ubuntu ls โฟลเดอร์นี้ได้ไหม" },
+      { id: "s4", title: "รันในนามของ pixbin", cmd: "sudo -u pixbin env DATA_DIR=/var/lib/pixbin /usr/local/bin/pixbin\nps -o user,pid,cmd -p $(pgrep -x pixbin)", note: "" },
+      { id: "s5", title: "health check โกหก", cmd: "sudo chmod 550 /var/lib/pixbin\ncurl -w ' %{http_code}\\n' localhost:8000/healthz\necho hi | curl -w ' %{http_code}\\n' --data-binary @- localhost:8000/upload", note: "อธิบายก่อนว่าทำไม healthz ผ่าน แล้วค่อย chmod 750 คืน" },
+      { id: "s6", title: "ลองเป็นคนร้าย", cmd: "sudo -u pixbin cat /etc/shadow\nsudo -u pixbin sh -c 'echo evil > /usr/local/bin/pixbin'", note: "ถูกกั้นด้วยสิทธิ์ตรงไหน" },
+      { id: "s7", title: "port ต่ำกว่า 1024", cmd: "sudo -u pixbin env DATA_DIR=/var/lib/pixbin PORT=80 /usr/local/bin/pixbin", note: "" }
+    ],
+    labSubmit: [
+      { id: "lab5", tag: "lab · ข้อ 5", q: "วางผล healthz และ upload หลัง chmod 550 แล้วอธิบายด้วยหลัก “สิทธิ์บนโฟลเดอร์ vs บนไฟล์” ว่าทำไมผลต่างกัน", mono: true },
+      { id: "lab6", tag: "lab · ข้อ 6", q: "ผลของคำสั่ง “คนร้าย” ทั้ง 4 ข้อ และแต่ละข้อถูกกั้นด้วยสิทธิ์ของอะไร", mono: true }
+    ],
+    mcq: [
+      { id: "m1", q: "สิทธิ์ 750 เขียนเป็นตัวอักษรได้แบบไหน",
+        opts: ["rwxr-x---", "rwxrwx---", "rw-r-x---", "rwxr-xr-x"], a: 0,
+        hints: ["แปลงทีละหลัก r=4 w=2 x=1", "7 = 4+2+1, 5 = 4+1, 0 = ไม่มีอะไร"],
+        why: "7 = rwx (owner), 5 = r-x (group), 0 = --- (others)" },
+      { id: "m2", q: "การลบไฟล์ทำได้หรือไม่ ขึ้นกับอะไรเป็นหลัก",
+        opts: ["สิทธิ์ w ของตัวไฟล์", "สิทธิ์ w และ x ของโฟลเดอร์ที่ไฟล์อยู่", "ต้องเป็น owner ของไฟล์เท่านั้น", "สิทธิ์ r ของไฟล์"], a: 1,
+        hints: ["ชื่อไฟล์ถูกเก็บไว้ที่ไหน ในไฟล์เองหรือในโฟลเดอร์", "การลบคือการแก้รายการชื่อ"],
+        why: "ชื่อไฟล์อยู่ในโฟลเดอร์ (ส่วนข้อมูลของไฟล์อยู่ใน inode) การลบคือการแก้รายการในโฟลเดอร์ จึงต้องมี w และ x บนโฟลเดอร์ (ยกเว้นโฟลเดอร์ที่ตั้ง sticky bit เช่น /tmp)" },
+      { id: "m3", q: "หลัง chmod 550 /var/lib/pixbin ทำไม /healthz ยังผ่าน แต่ upload ได้ 500",
+        opts: ["healthz ไม่ได้เขียนไฟล์", "healthz เขียนทับไฟล์ .healthz ที่มีอยู่แล้ว (ใช้ w ของไฟล์) แต่ upload ต้องสร้างไฟล์ใหม่ (ใช้ w ของโฟลเดอร์)", "upload ใช้ port อื่น", "cache ของ nginx"], a: 1,
+        hints: ["ดูโค้ด /healthz ใน main.go ว่าเขียนไฟล์ชื่ออะไร", "เขียนไฟล์ที่มีอยู่แล้ว กับสร้างไฟล์ใหม่ ต้องการสิทธิ์ที่ไหนต่างกัน"],
+        why: "แก้เนื้อหาไฟล์เดิมใช้สิทธิ์ของไฟล์ ส่วนสร้างไฟล์ใหม่ใช้สิทธิ์ของโฟลเดอร์ health check จึงต้องทดสอบสิ่งเดียวกับงานจริง" },
+      { id: "m4", q: "ทำไม /usr/local/bin/pixbin ควรเป็นของ root ทั้งที่รันในนามของ pixbin",
+        opts: ["ทำให้รันเร็วขึ้น", "pixbin แก้ program ตัวเองไม่ได้ ถ้าโดนเจาะก็ฝัง backdoor ลงใน binary ไม่ได้", "ต้องใช้สิทธิ์ bind port", "systemd บังคับ"], a: 1,
+        hints: ["ถ้า binary เป็นของ pixbin ใครแก้มันได้บ้าง", "คิดจากมุมคนร้ายที่ยึด process ได้แล้ว"],
+        why: "ให้ process อ่านและรันได้ แต่แก้ไม่ได้ การยึด process จึงไม่ได้สิทธิ์ถาวรในเครื่อง" }
+    ],
+    quiz: [
+      { id: "q1", tag: "เข้าใจ", q: "ทำไม program ควรเป็นของ root ทั้งที่รันในนามของ pixbin ถ้าให้เป็นของ pixbin จะเสี่ยงอะไร" },
+      { id: "q2", tag: "ประยุกต์", q: "ไฟล์สิทธิ์ 666 อยู่ในโฟลเดอร์สิทธิ์ 555 user ธรรมดาแก้เนื้อหาได้ไหม ลบได้ไหม เพราะอะไร" },
+      { id: "q3", tag: "debugging", q: "app ได้ permission denied ตอนเปิด /srv/app/data/x.db แต่ ls -l x.db ถูกทุกอย่าง จะตรวจอะไรต่อ" },
+      { id: "q4", tag: "architecture", q: "pixbin (upload) กับ thumbnailer (อ่านไฟล์ upload แล้วเขียน thumbnail อีกโฟลเดอร์) ออกแบบ user, group, owner และสิทธิ์ให้แต่ละตัวมีสิทธิ์น้อยที่สุด" },
+      { id: "q5", tag: "trade-off", q: "“รันเป็น root ใน container ไม่เป็นไร เพราะแยกจากเครื่องอยู่แล้ว” คุณจะตอบอย่างไร" }
+    ],
+    challenge: [
+      { id: "c1", tag: "challenge 1", q: "แก้ /healthz ให้จับกรณี chmod 550 ได้ วางโค้ดและผลพิสูจน์ แล้วบอกว่ายังพลาดกรณีไหนได้อีก", mono: true },
+      { id: "c2", tag: "challenge 2", q: "สร้างโครงสร้าง quiz ข้อ 4 จริงใน VM แล้วพิสูจน์ด้วย sudo -u ว่าแต่ละ user ทำได้/ไม่ได้ตามที่ออกแบบ", mono: true },
+      { id: "c3", tag: "challenge 3", q: "ใช้ namei -l หาว่าทำไม pixbin เข้า ~/cloud-infra-learn/pixbin/pixbin-linux ไม่ได้ เสนอ 2 วิธีแก้ และบอกว่าวิธีไหนดีกว่า" }
+    ]
+  },
+  {
+    id: "L05", code: "LESSON 05", phase: "Phase 1 · Linux",
+    title: "systemd, Service และ Logs",
+    lede: "ให้ OS ดูแล pixbin แทนเรา: เริ่มตอน boot, restart เมื่อตาย, เก็บ log ให้ย้อนดูได้ และลดสิทธิ์ลงอีกชั้นด้วย sandboxing",
+    source: "lessons/05-systemd-and-logs/README.md",
+    overview: `
+      <ul>
+        <li>unit file: <code>ExecStart</code>, <code>User</code>, <code>EnvironmentFile</code>, <code>Restart</code>, <code>TimeoutStopSec</code>, <code>WantedBy</code></li>
+        <li>แก้ unit → <code>daemon-reload</code> · สถานะ → <code>systemctl status</code> · log → <code>journalctl -u pixbin</code></li>
+        <li><code>Restart=on-failure</code> ไม่ restart เมื่อ exit 0 หรือโดน TERM/INT/HUP/PIPE (ถือว่าตั้งใจหยุด)</li>
+        <li>timeout ของ app &lt; <code>TimeoutStopSec</code> — ไม่งั้น systemd ส่ง KILL ก่อน app ปิดเสร็จ</li>
+        <li>systemd ใส่ service ไว้ใน <b>cgroup</b> — กลไกเดียวกับที่ Docker ใช้</li>
+        <li>systemd รู้แค่ว่า process <b>ยังไม่ตาย</b> ไม่รู้ว่า <b>ยังทำงานถูก</b></li>
+      </ul>`,
+    diagram:
+`systemd (PID 1) ── อ่าน pixbin.service + pixbin.env
+   │ fork + setuid(pixbin) + exec
+   ▼
+pixbin (cgroup: pixbin.service) ── stdout/stderr ──► journald ──► journalctl -u pixbin
+   │ ตาย (exit 1 / SIGKILL)
+   ▼
+"failure" → รอ RestartSec → start ใหม่ (NRestarts++) · ถี่เกิน → failed`,
+    lab: [
+      { id: "s1", title: "สร้าง env + unit แล้ว enable", cmd: "sudo systemctl daemon-reload\nsudo systemctl enable --now pixbin\nsystemctl status pixbin", note: "ไฟล์เต็มอยู่ในบทเรียนข้อ 7.1" },
+      { id: "s2", title: "PPID เป็น 1 และ cgroup", cmd: "ps -o user,pid,ppid,cmd -p $(systemctl show -p MainPID --value pixbin)\nsystemd-cgls -u pixbin.service", note: "" },
+      { id: "s3", title: "ตาม log", cmd: "journalctl -u pixbin -f", note: "" },
+      { id: "s4", title: "KILL แล้วฟื้น / TERM แล้วไม่ฟื้น", cmd: "sudo kill -KILL $(systemctl show -p MainPID --value pixbin)\nsystemctl show -p NRestarts pixbin", note: "ทำซ้ำด้วย -TERM" },
+      { id: "s5", title: "stop อย่างสุภาพ และเมื่อหมดเวลา", cmd: "curl \"localhost:8000/work/sleep?ms=30000\" & sleep 1; time sudo systemctl stop pixbin", note: "ลอง TimeoutStopSec=5 แล้วดูว่าใครฆ่าใคร" },
+      { id: "s6", title: "crash loop", cmd: "sudo sed -i 's/^PORT=.*/PORT=80/' /etc/pixbin/pixbin.env\nsudo systemctl restart pixbin; sleep 15\njournalctl -u pixbin -n 30 --no-pager", note: "หาสาเหตุจาก journal อย่างเดียว แล้วคืนค่า + reset-failed" },
+      { id: "s7", title: "รอด reboot", cmd: "sudo reboot\nmultipass shell lab\nsystemctl status pixbin --no-pager | head -3", note: "" },
+      { id: "s8", title: "sandboxing", cmd: "systemd-analyze security pixbin | tail -1\nsudo systemctl edit pixbin   # NoNewPrivileges, ProtectSystem=strict ...", note: "ลองเอา ReadWritePaths ออกแล้ว upload" }
+    ],
+    labSubmit: [
+      { id: "lab4", tag: "lab · ข้อ 4", q: "ผล NRestarts และ journal หลัง KILL เทียบกับหลัง TERM แล้วอธิบายว่าทำไมต่างกัน", mono: true },
+      { id: "lab5", tag: "lab · ข้อ 5", q: "journal ของรอบ TimeoutStopSec=15 และ =5 แต่ละรอบใครเป็นคนจบ process และ curl ได้อะไร", mono: true },
+      { id: "lab6", tag: "lab · ข้อ 6", q: "บรรทัด journal ที่บอกต้นเหตุของ crash loop และ 2 วิธีแก้", mono: true }
+    ],
+    mcq: [
+      { id: "m1", q: "แก้ /etc/systemd/system/pixbin.service แล้ว restart แต่ค่าใหม่ไม่มีผล ลืมทำอะไร",
+        opts: ["systemctl enable", "systemctl daemon-reload", "reboot", "journalctl --flush"], a: 1,
+        hints: ["systemd อ่าน unit file เมื่อไร", "มีคำสั่งที่บอก systemd ให้อ่าน unit ทั้งหมดใหม่"],
+        why: "systemd เก็บ unit ไว้ใน memory ต้อง daemon-reload ให้อ่านไฟล์ใหม่ก่อน restart" },
+      { id: "m2", q: "Restart=on-failure แล้วส่ง kill -TERM ให้ pixbin systemd จะ restart ให้ไหม",
+        opts: ["restart เสมอ", "ไม่ restart เพราะ SIGTERM นับเป็นการหยุดโดยตั้งใจ", "restart หลัง 2 วินาที", "ขึ้นกับ exit code ของ nginx"], a: 1,
+        hints: ["systemd นิยามคำว่า failure อย่างไร", "สัญญาณบางตัวถือว่าเป็นการปิดปกติ"],
+        why: "exit 0 และ SIGTERM/SIGINT/SIGHUP/SIGPIPE ถือว่าปิดปกติ on-failure จึงไม่ restart ต้องใช้ Restart=always ถ้าอยากให้ restart ทุกกรณี" },
+      { id: "m3", q: "systemctl status แสดง status=203/EXEC หมายความว่าอะไร",
+        opts: ["app ทำงานแล้ว crash", "systemd เริ่ม program ตาม ExecStart ไม่ได้ (path ผิด หรือไม่มีสิทธิ์ execute)", "โดน OOM", "user ไม่มีอยู่"], a: 1,
+        hints: ["203 เป็นตัวเลขที่ systemd ใช้เองหรือ app ส่งมา", "ตัวเลขในช่วง 200 มักเป็นปัญหาตอน systemd เตรียม process"],
+        why: "2xx เป็นรหัสของ systemd ตอนเตรียม process (203 EXEC, 217 USER) แปลว่า app ยังไม่ได้เริ่มเลย ให้ตรวจ ExecStart และสิทธิ์" },
+      { id: "m4", q: "ควรตั้ง TimeoutStopSec เทียบกับเวลา graceful shutdown ของ app อย่างไร",
+        opts: ["สั้นกว่า", "ยาวกว่า", "เท่ากันพอดี", "ไม่เกี่ยวกัน"], a: 1,
+        hints: ["ถ้า systemd หมดความอดทนก่อน จะเกิดอะไรกับ request ที่ค้าง", "หลังหมดเวลา systemd ส่ง signal อะไร"],
+        why: "ต้องยาวกว่า ให้ app ปิดตัวเองเสร็จก่อน ไม่งั้น systemd ส่ง SIGKILL ตัด request ที่ค้างอยู่" }
+    ],
+    quiz: [
+      { id: "q1", tag: "เข้าใจ", q: "systemd รู้ได้อย่างไรว่า process ไหนเป็นของ pixbin.service แม้ pixbin จะ fork ลูกออกไปหลายตัว" },
+      { id: "q2", tag: "ประยุกต์", q: "Restart=on-failure แต่ app ตายด้วย exit 0 เพราะ bug systemd จะ restart ไหม ควรตั้งค่าอย่างไร" },
+      { id: "q3", tag: "debugging", q: "status=203/EXEC ต่างจาก status=1/FAILURE อย่างไร และจะตรวจอะไร" },
+      { id: "q4", tag: "debugging", q: "เว็บ timeout แต่ systemctl status บอก active (running), NRestarts=0 เป็นไปได้อย่างไร systemd ช่วยอะไรได้ไหม" },
+      { id: "q5", tag: "trade-off", q: "ให้ pixbin ฟัง port 80: รันเป็น root / AmbientCapabilities=CAP_NET_BIND_SERVICE / reverse proxy เปรียบเทียบข้อดีข้อเสีย" }
+    ],
+    challenge: [
+      { id: "c1", tag: "challenge 1", q: "ใช้ AmbientCapabilities ให้ pixbin ฟัง port 80 โดยไม่เป็น root พิสูจน์ด้วย ps และ curl แล้วอธิบายว่าทำไม Lesson 11 จะไม่ใช้วิธีนี้", mono: true },
+      { id: "c2", tag: "challenge 2", q: "วาง pixbin-cleanup.service + .timer ที่ลบไฟล์เก่ากว่า 1 วันทุก 10 นาที และเหตุผลที่เลือก user ที่ใช้รัน", mono: true },
+      { id: "c3", tag: "challenge 3", q: "ทำให้ systemd-analyze security ต่ำกว่า 5.0 โดยที่ pixbin ยังทำงานครบ บันทึกสิ่งที่เพิ่มและตัวที่ทำให้พังระหว่างทาง", mono: true }
+    ]
+  },
+  {
+    id: "L06", code: "LESSON 06", phase: "Phase 1 · Linux",
+    title: "เมื่อทรัพยากรหมด: OOM, Disk เต็ม, CPU, File descriptor",
+    lede: "ระบบส่วนใหญ่พังเพราะของหมด ไม่ใช่เพราะ bug ซับซ้อน บทนี้ทำให้ของหมดทีละอย่างแบบตั้งใจ แล้วฝึกหาต้นเหตุด้วย USE method",
+    source: "lessons/06-when-resources-run-out/README.md",
+    overview: `
+      <ul>
+        <li>CPU หมด = <b>ช้า</b> · memory หมด = <b>ถูกฆ่า</b> (137) · disk หมด = <b>error</b> ENOSPC · fd หมด = <b>connection ใหม่ค้าง</b></li>
+        <li><code>free -m</code> ดูที่ <b>available</b> · load average เทียบกับจำนวน core</li>
+        <li>หลักฐาน OOM อยู่ใน kernel log: <code>journalctl -k</code> · systemd บอก <code>Failed with result 'oom-kill'</code></li>
+        <li><code>df</code> เต็มแต่ <code>du</code> หาไม่เจอ → ไฟล์ที่ถูกลบแต่ยังเปิดอยู่ → <code>lsof +L1</code></li>
+        <li><b>USE</b>: Utilization, Saturation, Errors — ถามครบสามข้อกับทุกทรัพยากร</li>
+      </ul>`,
+    diagram:
+`             "เว็บช้า / error"
+     ┌────────────┼─────────────┬──────────────┐
+  uptime/top    free -m       df -h / -i    log: too many open files?
+  CPU เต็ม?     available?     100%?         ls /proc/PID/fd | wc -l
+     │          journalctl -k  lsof +L1
+  top -o %CPU   "Out of memory" du หาตัวใหญ่`,
+    lab: [
+      { id: "s1", title: "baseline", cmd: "uptime; nproc; free -m; df -h /; vmstat 1 5", note: "จดค่าปกติไว้" },
+      { id: "s2", title: "CPU 100%", cmd: "for i in $(seq 40); do curl -s \"localhost:8000/work/cpu?n=5000\" > /dev/null & done\ntime curl localhost:8000/; uptime; vmstat 1 5", note: "ดู htop ใน V1" },
+      { id: "s3", title: "OOM ด้วย MemoryMax=300M", cmd: "sudo systemctl edit pixbin   # MemoryMax=300M, MemorySwapMax=0\ncurl \"localhost:8000/work/mem?mb=100\"   # 3 ครั้ง\njournalctl -k -n 20 --no-pager | grep -i -A2 memory", note: "" },
+      { id: "s4", title: "disk เต็ม (tmpfs 20M)", cmd: "sudo mount -t tmpfs -o size=20M,uid=$(id -u pixbin),gid=$(id -g pixbin),mode=0750 tmpfs /var/lib/pixbin\nsudo systemctl restart pixbin\ncurl -w ' %{http_code}\\n' --data-binary @/tmp/15m.bin localhost:8000/upload   # 2 ครั้ง", note: "ดู ls -l หาไฟล์ที่ไม่ควรค้าง" },
+      { id: "s5", title: "df vs du", cmd: "sudo sh -c 'exec 3>/mnt/big.log; head -c 12M /dev/zero >&3; rm /mnt/big.log; sleep 120' &\ndf -h /mnt; sudo du -sh /mnt; sudo lsof -nP +L1 | grep /mnt", note: "หาวิธีคืนพื้นที่โดยไม่ reboot" },
+      { id: "s6", title: "fd หมด", cmd: "sudo systemctl edit pixbin   # LimitNOFILE=20\nfor i in $(seq 30); do curl -s -m 3 -o /dev/null -w \"%{http_code} \" \"localhost:8000/work/sleep?ms=2000\" & done; wait", note: "ลบ limit ทั้งหมดออกเมื่อเสร็จ" }
+    ],
+    labSubmit: [
+      { id: "lab3", tag: "lab · ข้อ 3", q: "บรรทัด journal ของ pixbin และ kernel log ที่เป็นหลักฐานของ OOM kill", mono: true },
+      { id: "lab4", tag: "lab · ข้อ 4", q: "ผล upload/healthz ตอน disk เต็ม และไฟล์ที่ค้างอยู่ใน ls -l พร้อมอธิบายว่าทำไมมันค้าง", mono: true },
+      { id: "lab56", tag: "lab · ข้อ 5 + 6", q: "ผล df/du/lsof ของข้อ 5 วิธีคืนพื้นที่ที่ใช้ และผลของข้อ 6 พร้อมอธิบายว่าทำไมได้ timeout ไม่ใช่ refused", mono: true }
+    ],
+    mcq: [
+      { id: "m1", q: "ดู free -m แล้วจะรู้ว่า memory พอไหม ควรดูคอลัมน์ไหน",
+        opts: ["free", "used", "available", "shared"], a: 2,
+        hints: ["Linux เอา RAM ว่างไปทำอะไรระหว่างที่ไม่มีใครใช้", "memory ส่วนที่เป็น cache ของไฟล์ คืนได้ทันทีเมื่อมีคนต้องการ"],
+        why: "Linux เอา RAM ว่างไปทำ cache ของไฟล์ free จึงดูน้อยเสมอ available คือที่ใช้ได้จริงเมื่อรวม cache ที่คืนได้แล้ว" },
+      { id: "m2", q: "เครื่อง 4 core มี load average 8.0 หมายความว่า",
+        opts: ["CPU ใช้ 8%", "มีงานที่อยากใช้ CPU (หรือรอ disk) มากกว่าที่ core รองรับประมาณเท่าตัว", "มี process 8 ตัว", "memory ใช้ 8 GB"], a: 1,
+        hints: ["load นับอะไร", "เทียบ load กับจำนวน core"],
+        why: "load นับจำนวน process ที่รันหรือรอ CPU (และที่รอ disk แบบ D) เฉลี่ย เมื่อ load 8 บน 4 core แปลว่ามีงานรอคิวเท่ากับที่กำลังทำอยู่" },
+      { id: "m3", q: "df บอก disk เต็ม 100% แต่ du รวมได้แค่ 60% สาเหตุที่เป็นไปได้คือ",
+        opts: ["du คำนวณผิด", "มีไฟล์ที่ถูกลบไปแล้วแต่ process ยังเปิดอยู่ พื้นที่จึงยังไม่คืน", "RAM เต็ม", "inode เหลือเยอะ"], a: 1,
+        hints: ["du นับจากอะไร ส่วน df นับจากอะไร", "ไฟล์ที่ไม่มีชื่อในโฟลเดอร์แล้ว du มองเห็นไหม"],
+        why: "du เดินตามชื่อไฟล์ในโฟลเดอร์ ส่วน df ถาม filesystem ว่าใช้ block ไปเท่าไร ไฟล์ที่ถูกลบแต่ยังเปิดอยู่ไม่มีชื่อแล้วแต่ยังกิน block หาได้ด้วย lsof +L1" },
+      { id: "m4", q: "fd ของ app หมด อาการที่ user เห็นคือ",
+        opts: ["app crash ทันที", "request ใหม่ค้างหรือ timeout ทั้งที่ CPU/memory ว่าง", "ได้ 404", "ได้ certificate error"], a: 1,
+        hints: ["connection ใหม่ต้องใช้ fd ตอนไหน", "kernel ยังทำ handshake ให้ได้ไหม แม้ app จะ accept ไม่ได้"],
+        why: "app accept connection ใหม่ไม่ได้ (EMFILE) connection จึงค้างในคิวของ kernel client จึงรอจนช้าหรือ timeout ส่วน app ไม่ตาย แค่ log ว่า too many open files" }
+    ],
+    quiz: [
+      { id: "q1", tag: "เข้าใจ", q: "ทำไม free -m บนเครื่องที่ทำงานมานานแสดง free เหลือน้อยมาก ทั้งที่ระบบไม่มีปัญหา" },
+      { id: "q2", tag: "ประยุกต์", q: "เครื่อง 4 core load 12 แต่ top แสดง CPU รวมแค่ 20% อะไรน่าจะเกิดขึ้น" },
+      { id: "q3", tag: "debugging", q: "df บอก / เต็ม 100% แต่ du รวมได้ 60% ตั้ง hypothesis อย่างน้อย 2 ข้อ และวิธีพิสูจน์" },
+      { id: "q4", tag: "debugging", q: "container ตายด้วย 137 ซ้ำทุก ~2 ชั่วโมง จะเก็บข้อมูลอะไรเพื่อแยกว่าเป็น memory leak หรือ traffic peak" },
+      { id: "q5", tag: "trade-off", q: "pixbin รับ upload ไม่จำกัดขนาด ควรจำกัดที่ชั้นไหน (app, proxy, quota) และทำไมควรมีมากกว่าหนึ่งชั้น" }
+    ],
+    challenge: [
+      { id: "c1", tag: "challenge 1", q: "แก้ /upload ให้ลบไฟล์ที่เขียนไม่ครบเมื่อ error และจำกัด 10 MB วางโค้ดและผลพิสูจน์", mono: true },
+      { id: "c2", tag: "challenge 2", q: "วาง triage.sh และผลเมื่อใช้กับข้อ 2–6 มันจับได้ทุกกรณีไหม", mono: true },
+      { id: "c3", tag: "challenge 3", q: "ตั้ง journald ไม่เกิน 100 MB พิสูจน์ด้วย journalctl --disk-usage และอธิบายว่าเมื่อถึง limit journald ทำอะไร", mono: true }
+    ]
+  },
+  {
+    id: "L07", code: "LESSON 07", phase: "Phase 2 · Networking",
+    title: "IP, Subnet และ Routing",
+    lede: "packet รู้ได้อย่างไรว่าต้องไปทางไหน ทำไม Mac คุยกับ VM ได้ แต่เพื่อนบนอินเทอร์เน็ตคุยกับ VM ไม่ได้ และพื้นฐานที่ต้องมีก่อนออกแบบ VPC",
+    source: "lessons/07-ip-subnet-routing/README.md",
+    overview: `
+      <ul>
+        <li>IP เป็นของ interface · CIDR <code>/n</code> = n bit แรกคือ network · จำนวน address = 2^(32−n)</li>
+        <li>private: <code>10/8</code>, <code>172.16/12</code>, <code>192.168/16</code> — เข้าจากอินเทอร์เน็ตตรง ๆ ไม่ได้</li>
+        <li>ปลายทางในวงเดียวกัน → ARP หา MAC แล้วส่งตรง · ต่างวง → ส่งให้ default gateway</li>
+        <li>routing ใช้ <b>longest prefix match</b> · <code>default</code> = <code>0.0.0.0/0</code></li>
+        <li>MAC เปลี่ยนทุก hop · IP ปลายทางไม่เปลี่ยน (ยกเว้นผ่าน NAT)</li>
+        <li>“Network is unreachable” = ไม่มีทาง · “Host Unreachable” = มีทางแต่หาเครื่องไม่เจอ · timeout = ไปแล้วเงียบ</li>
+      </ul>`,
+    diagram:
+`   อินเทอร์เน็ต
+        │ public IP ของบ้าน
+   Router บ้าน 192.168.1.1
+        │ 192.168.1.0/24
+   Mac  en0 192.168.1.20 · bridge100 192.168.64.1 (router ให้ VM)
+        │ 192.168.64.0/24
+   VM   enp0s1 192.168.64.5 · default via 192.168.64.1`,
+    lab: [
+      { id: "s1", title: "network ของ Mac", cmd: "ifconfig en0 | grep \"inet \"\nroute -n get default | grep gateway\nifconfig bridge100 | grep \"inet \"", note: "" },
+      { id: "s2", title: "network ของ VM", cmd: "ip -br addr\nip route\nip -br link", note: "วาด diagram ด้วยตัวเลขจริง" },
+      { id: "s3", title: "ถาม kernel", cmd: "ip route get 1.1.1.1\nip route get 192.168.64.1\nip route get 127.0.0.1", note: "บรรทัดไหนมี via" },
+      { id: "s4", title: "ARP", cmd: "ip neigh; ping -c 2 192.168.64.1; ip neigh\n# Mac: arp -an | grep bridge100", note: "MAC ตรงกันไหม" },
+      { id: "s5", title: "traceroute", cmd: "sudo apt install -y traceroute\ntraceroute -n 1.1.1.1", note: "hop 1 และ 2 คือใคร" },
+      { id: "s6", title: "ลบ default route", cmd: "sudo ip route del default\nping -c 2 1.1.1.1; ping -c 2 192.168.64.1\nsudo ip route add default via 192.168.64.1", note: "ทำไม SSH ไม่หลุด" },
+      { id: "s7", title: "host ที่ไม่มีอยู่ในวง", cmd: "ping -c 3 192.168.64.250\nip neigh | grep 192.168.64.250", note: "" },
+      { id: "s8", title: "คำนวณ CIDR", cmd: "python3 -c \"import ipaddress as ip; n=ip.ip_network('172.20.5.9/20', strict=False); print(n, n[0], n[-1], n.num_addresses)\"", note: "คิดในหัวก่อนรัน" }
+    ],
+    labSubmit: [
+      { id: "lab2", tag: "lab · ข้อ 1–2", q: "diagram network จริงของคุณ (Mac, VM, router บ้าน) พร้อม IP และ subnet", mono: true },
+      { id: "lab67", tag: "lab · ข้อ 6–7", q: "ผลของข้อ 6 และ 7 และอธิบายความต่างระหว่าง Network is unreachable กับ Host Unreachable และทำไม SSH ไม่หลุด", mono: true }
+    ],
+    mcq: [
+      { id: "m1", q: "10.0.1.0/24 มีทั้งหมดกี่ address",
+        opts: ["24", "254", "256", "65,536"], a: 2,
+        hints: ["เหลือกี่ bit เป็นส่วน host", "2^(32−24)"],
+        why: "2^8 = 256 address (ใช้กับเครื่องได้น้อยกว่านี้ เพราะ network และ broadcast และใน AWS จองเพิ่มอีก 3)" },
+      { id: "m2", q: "route: 10.0.0.0/16 via A · 10.0.5.0/24 via B · default via C — packet ไป 10.0.5.9 ไปทางไหน",
+        opts: ["A", "B", "C", "ทิ้ง packet"], a: 1,
+        hints: ["มีกี่ route ที่ครอบ 10.0.5.9", "เลือกอันที่เจาะจงที่สุด"],
+        why: "ทั้ง /16 และ /24 ครอบ 10.0.5.9 kernel เลือก prefix ยาวที่สุด (/24) จึงไปทาง B" },
+      { id: "m3", q: "ping 1.1.1.1 ได้ “Network is unreachable” ทันที แปลว่า",
+        opts: ["ปลายทางปิดเครื่อง", "เครื่องเราไม่มี route ไปปลายทางนั้น (เช่นไม่มี default route)", "firewall ของปลายทาง DROP", "DNS พัง"], a: 1,
+        hints: ["error ขึ้นทันที แปลว่า packet ออกจากเครื่องไปหรือยัง", "kernel หาทางไปไม่ได้ตั้งแต่ในเครื่อง"],
+        why: "kernel ไม่พบ route ที่ครอบปลายทาง จึงไม่ส่ง packet ออกไปเลย ตรวจด้วย ip route / ip route get" },
+      { id: "m4", q: "IP ไหนเป็น private IP",
+        opts: ["172.32.1.5", "172.20.1.5", "11.0.0.1", "192.169.1.1"], a: 1,
+        hints: ["ช่วง 172 ที่เป็น private คือ 172.16.0.0/12", "/12 ครอบ 172.16 ถึง 172.31"],
+        why: "172.16.0.0/12 = 172.16.0.0–172.31.255.255 จึงมี 172.20.1.5 แต่ไม่มี 172.32 ส่วน 192.169 ไม่อยู่ใน 192.168/16" }
+    ],
+    quiz: [
+      { id: "q1", tag: "เข้าใจ", q: "ทำไม MAC เปลี่ยนทุก hop แต่ IP ปลายทางไม่เปลี่ยน ถ้าใช้ MAC ส่งข้ามโลกจะมีปัญหาอะไร" },
+      { id: "q2", tag: "ประยุกต์", q: "route: 10.0.0.0/16 via A, 10.0.5.0/24 via B, default via C — packet ไป 10.0.5.9, 10.0.9.1, 8.8.8.8 ไปทางไหนตามลำดับ" },
+      { id: "q3", tag: "debugging", q: "เครื่องหนึ่ง ping 1.1.1.1 ได้ Network is unreachable ทันที อีกเครื่องค้างจน timeout สองเครื่องมีปัญหาต่างกันอย่างไร" },
+      { id: "q4", tag: "architecture", q: "ออกแบบ CIDR ของ VPC Pixbin: subnet web (เข้าจากเน็ตได้) และ database (ห้ามเข้า) อย่างละ 2 ชุดสำหรับ 2 AZ เผื่อขยาย ให้ตัวเลขทุก subnet" },
+      { id: "q5", tag: "trade-off", q: "บริษัทที่จะ VPN เข้ามาใช้ 10.0.0.0/16 ซ้ำกับ VPC ของคุณ เกิดปัญหาอะไร ถ้าย้อนเวลาได้จะป้องกันอย่างไร" }
+    ],
+    challenge: [
+      { id: "c1", tag: "challenge 1", q: "เพิ่ม route 1.1.1.1/32 ไปที่ IP ที่ไม่มีเครื่อง ทำนายผล ping 1.1.1.1 และ 1.0.0.1 ก่อนรัน แล้วอธิบายด้วย longest prefix match", mono: true },
+      { id: "c2", tag: "challenge 2", q: "หา MTU และขนาด packet ใหญ่สุดด้วย ping -M do -s แล้วอธิบายอาการ “เว็บเล็กเปิดได้ เว็บใหญ่ค้าง”", mono: true },
+      { id: "c3", tag: "challenge 3", q: "อธิบายให้ dev ใหม่ฟัง (ไม่เกิน 15 บรรทัด) ว่า ping 1.1.1.1 จาก VM ไปถึงปลายทางได้อย่างไร" }
+    ]
+  },
+  {
+    id: "L08", code: "LESSON 08", phase: "Phase 2 · Networking",
+    title: "NAT และ Firewall",
+    lede: "VM ที่มี private IP ออกอินเทอร์เน็ตได้อย่างไร ทำไมข้างนอกเริ่มเข้ามาไม่ได้ และเปิดปิดประตูอย่างมีสติด้วย default deny",
+    source: "lessons/08-nat-and-firewall/README.md",
+    overview: `
+      <ul>
+        <li><b>SNAT</b> เปลี่ยน source ของเครื่องข้างในเป็น IP ของ router แล้วจำไว้ใน <b>conntrack</b> ขากลับจึงรู้ว่าต้องส่งให้ใคร</li>
+        <li>คนนอก “เริ่ม” เข้ามาไม่ได้เพราะ NAT ไม่รู้จะส่งให้ใคร — แต่ <b>NAT ไม่ใช่ security</b></li>
+        <li>firewall: <b>default deny</b> · stateful จำ connection · <b>DROP = timeout</b> · <b>REJECT = refused</b></li>
+        <li>Security Group ของ AWS = stateful · Network ACL = stateless</li>
+        <li>เปิด SSH ก่อน enable firewall เสมอ</li>
+      </ul>`,
+    diagram:
+`VM 192.168.64.5:51000 ──► 34.x.x.x:443
+  Mac NAT:     src → 192.168.1.20:40001     (จด conntrack)
+  Router NAT:  src → 203.0.113.7:62001      (จด conntrack)
+  ขากลับ: ดูสมุดย้อนทีละชั้น → ถึง VM ✅
+<span class="c"> packet ที่เข้ามาเองโดยไม่มีใครเริ่ม → ไม่มีในสมุด → ทิ้ง</span>`,
+    lab: [
+      { id: "s1", title: "public vs private", cmd: "curl -s https://ifconfig.me; echo   # ทั้งบน Mac และ VM", note: "ทำไม public IP เหมือนกัน" },
+      { id: "s2", title: "ใครเห็นใคร", cmd: "DATA_DIR=/tmp/px HOST=0.0.0.0 PORT=8001 ~/cloud-infra-learn/pixbin/pixbin-linux\n# Mac: curl http://<IP VM>:8001/", note: "ลองจากมือถือด้วย" },
+      { id: "s3", title: "เปิด ufw (allow SSH ก่อน!)", cmd: "sudo ufw default deny incoming\nsudo ufw default allow outgoing\nsudo ufw allow OpenSSH\nsudo ufw enable", note: "Mac: curl -m 5 ... ได้อะไร" },
+      { id: "s4", title: "DROP vs REJECT", cmd: "sudo ufw reject 8001/tcp\n# Mac: time curl -m 5 http://<IP VM>:8001/", note: "" },
+      { id: "s5", title: "เปิดเฉพาะคนที่ควรเข้า", cmd: "sudo ufw delete reject 8001/tcp\nsudo ufw allow from 192.168.64.1 to any port 8001 proto tcp", note: "" },
+      { id: "s6", title: "ดูสมุด conntrack", cmd: "sudo apt install -y conntrack\nsudo conntrack -L 2>/dev/null | grep -E \"dport=(443|8001)\" | head", note: "" },
+      { id: "s7", title: "เก็บกวาด", cmd: "sudo ufw delete allow from 192.168.64.1 to any port 8001 proto tcp\nsudo ufw status numbered", note: "เหลือแค่ OpenSSH และเปิด ufw ทิ้งไว้" }
+    ],
+    labSubmit: [
+      { id: "lab12", tag: "lab · ข้อ 1–2", q: "public IP ของ Mac และ VM, ค่า you came from ที่เห็นจาก Mac และผลจากมือถือ พร้อมเหตุผล", mono: true },
+      { id: "lab34", tag: "lab · ข้อ 3–4", q: "ผลและเวลาของ curl ตอน DROP กับตอน REJECT และอธิบายว่า VM ยังออกอินเทอร์เน็ตได้เพราะอะไร", mono: true }
+    ],
+    mcq: [
+      { id: "m1", q: "firewall ตั้งกฎ DROP client ที่พยายามเชื่อมต่อจะเห็นอะไร",
+        opts: ["connection refused ทันที", "รอจน timeout", "HTTP 403", "certificate error"], a: 1,
+        hints: ["DROP ส่งอะไรกลับไปไหม", "ถ้าไม่มีอะไรกลับมา client ทำอะไรได้บ้าง"],
+        why: "DROP ทิ้งเงียบ ๆ client ไม่ได้ SYN-ACK หรือ RST จึงส่งซ้ำแล้วรอจนหมดเวลา ส่วน REJECT ตอบกลับ client จึงเห็น refused ทันที" },
+      { id: "m2", q: "ทำไม VM ที่ใช้ private IP ออกอินเทอร์เน็ตได้ แต่คนนอกเริ่มเชื่อมต่อเข้ามาไม่ได้",
+        opts: ["ISP บล็อก", "NAT จำเฉพาะ connection ที่ข้างในเป็นคนเริ่ม ขาเข้าที่ไม่มีในสมุดจึงไม่รู้จะส่งให้ใคร", "private IP ส่ง packet ได้ทางเดียว", "DNS ไม่รู้จัก VM"], a: 1,
+        hints: ["ขากลับของ response รู้ได้อย่างไรว่าต้องไปหา VM", "ถ้าไม่มีใครเริ่ม ตารางนั้นมีข้อมูลไหม"],
+        why: "SNAT บันทึกการแปลงไว้ใน conntrack response จึงถูกแปลงกลับได้ packet ใหม่จากข้างนอกไม่มี entry ให้แปลง" },
+      { id: "m3", q: "stateful firewall หมายถึงอะไร",
+        opts: ["เก็บกฎไว้ใน disk", "จำ connection ได้ response ของ connection ที่เราเริ่มผ่านเองโดยไม่ต้องมีกฎขาเข้า", "ตรวจเนื้อหา HTTP", "รีสตาร์ทเองเมื่อพัง"], a: 1,
+        hints: ["ทำไม ufw default deny incoming แล้ว VM ยังโหลดเว็บได้", "state คือข้อมูลอะไร"],
+        why: "firewall จด connection ไว้ใน conntrack packet ขากลับที่ตรงกับ connection เดิมจึงผ่านได้ ส่วน stateless ต้องเขียนกฎขากลับเอง" },
+      { id: "m4", q: "ก่อน sudo ufw enable บน server ที่ใช้งานผ่าน SSH ต้องทำอะไร",
+        opts: ["reboot", "allow SSH (port 22)", "ปิด nginx", "ลบ default route"], a: 1,
+        hints: ["default deny incoming ห้ามอะไรบ้าง", "session ที่คุณใช้อยู่เข้ามาทาง port ไหน"],
+        why: "ไม่งั้น default deny จะตัด SSH ทำให้ล็อกตัวเองออก ใน cloud ยังแก้ได้จาก console แต่ใน VM ของเราต้องสร้างใหม่" }
+    ],
+    quiz: [
+      { id: "q1", tag: "เข้าใจ", q: "ทำไม NAT ทำให้คนข้างนอก “เริ่ม” คุยกับเครื่องข้างในไม่ได้ ทั้งที่ไม่มีกฎ firewall ใด ๆ" },
+      { id: "q2", tag: "ประยุกต์", q: "stateless firewall ของ server ที่รับ HTTPS ต้องเขียนกฎขาออกอย่างไรให้ response ถึง client" },
+      { id: "q3", tag: "debugging", q: "เปิด port 5432 ใน Security Group แล้วแต่ connect DB ไม่ได้ อาการ refused ทันที จะไม่ตรวจอะไร และตรวจอะไรก่อน" },
+      { id: "q4", tag: "architecture", q: "ออกแบบกฎ firewall ขาเข้าของ web server, database และ admin (SSH) ด้วยหลัก default deny" },
+      { id: "q5", tag: "trade-off", q: "“ใช้ DROP ดีกว่า REJECT เพราะคนร้ายจะไม่รู้ว่ามีเครื่อง” เห็นด้วยไหม มีข้อเสียกับทีมตัวเองอย่างไร" }
+    ],
+    challenge: [
+      { id: "c1", tag: "challenge 1", q: "ทำให้มือถือเข้า pixbin ใน VM ได้โดยไม่เปลี่ยน network ของ multipass อธิบายเส้นทางของ packet และทำไม production ไม่ทำแบบนี้", mono: true },
+      { id: "c2", tag: "challenge 2", q: "หากฎที่ ufw สร้างให้ใน nft/iptables สำหรับ OpenSSH และ default deny แล้วอธิบาย", mono: true },
+      { id: "c3", tag: "challenge 3", q: "เทียบ public IP จาก ifconfig.me กับ WAN IP ของ router บ้าน ถ้าไม่ตรงแปลว่าอะไร ส่งผลอย่างไรถ้าอยากเปิด server ที่บ้าน" }
+    ]
+  },
+  {
+    id: "L09", code: "LESSON 09", phase: "Phase 2 · Networking",
+    title: "TCP และ UDP",
+    lede: "มองเข้าไปใน connection จริงด้วย tcpdump: handshake, การส่งซ้ำ, state ต่าง ๆ และทำไม latency ถึงเท่ากับระยะทางคูณจำนวนรอบ",
+    source: "lessons/09-tcp-and-udp/README.md",
+    overview: `
+      <ul>
+        <li>TCP: <code>SYN → SYN-ACK → ACK</code> แล้วส่ง/ACK/ส่งซ้ำ แล้ว FIN · UDP: ส่งแล้วจบ ไม่มีใครบอกว่าถึงไหม</li>
+        <li><b>RST</b> = ปฏิเสธทันที (refused) · SYN ไม่มีคนตอบ = <b>SYN-SENT</b> ค้าง (timeout)</li>
+        <li>เวลาถึง byte แรก ≈ จำนวนรอบ × RTT + เวลา server · HTTP ใหม่ไม่มี TLS = 2 RTT</li>
+        <li><b>CLOSE-WAIT</b> สะสม = app ลืมปิด connection · TIME-WAIT = ฝั่งที่ปิดก่อนรอ ~60s</li>
+        <li>ใช้ keep-alive / connection pool และตั้ง timeout ทุกชั้น</li>
+      </ul>`,
+    diagram:
+`Client                         Server
+  │── SYN ──────────────────►│ ┐
+  │◄────────────── SYN-ACK ──│ │ 1 RTT
+  │── ACK + request ────────►│ ┘
+  │◄────────────── response ─│   1 RTT
+  │── FIN ──► ◄── FIN ── ACK │
+TIME-WAIT
+<span class="c"> Flags ใน tcpdump: [S] SYN · [S.] SYN-ACK · [.] ACK · [P.] มีข้อมูล · [F.] FIN · [R.] RST</span>`,
+    lab: [
+      { id: "s1", title: "ดู handshake", cmd: "sudo tcpdump -i lo -n 'tcp port 8000'   # V1\ncurl localhost:8000/                     # V2", note: "จับคู่กับ diagram" },
+      { id: "s2", title: "refused ระดับ packet", cmd: "sudo tcpdump -i lo -n 'tcp port 8009'\ncurl localhost:8009/", note: "หา [R.]" },
+      { id: "s3", title: "DROP → SYN-SENT ค้าง", cmd: "sudo iptables -I INPUT -p tcp --dport 8010 -j DROP\ncurl -m 10 http://localhost:8010/ & sleep 2; ss -tan state syn-sent; wait\nsudo iptables -D INPUT -p tcp --dport 8010 -j DROP", note: "ดูระยะห่างของ SYN ที่ส่งซ้ำ" },
+      { id: "s4", title: "TIME-WAIT", cmd: "for i in $(seq 20); do curl -s localhost:8000/ > /dev/null; done\nss -tan state time-wait '( dport = :8000 or sport = :8000 )'", note: "ใครปิดก่อน" },
+      { id: "s5", title: "หน่วง 50ms แล้ววัด", cmd: "sudo tc qdisc add dev lo root netem delay 50ms\ncurl -s -o /dev/null -w \"connect=%{time_connect} ttfb=%{time_starttransfer}\\n\" localhost:8000/\nsudo tc qdisc del dev lo root", note: "ทำนายก่อน ลอง keep-alive ด้วย และอย่าลืมลบ delay" },
+      { id: "s6", title: "UDP ไม่มีใครบอกว่าไม่มีคนรับ", cmd: "nc -z -w 2 127.0.0.1 9999; echo \"tcp exit=$?\"\necho hi | nc -u -w 1 127.0.0.1 9999; echo \"udp exit=$?\"", note: "" },
+      { id: "s7", title: "DNS ใช้ UDP", cmd: "sudo tcpdump -i any -n 'udp port 53'\ndig example.com @1.1.1.1", note: "" }
+    ],
+    labSubmit: [
+      { id: "lab1", tag: "lab · ข้อ 1–2", q: "วาง tcpdump ของข้อ 1 และ 2 แล้วระบุว่าบรรทัดไหนคือ handshake, ข้อมูล, การปิด และ RST", mono: true },
+      { id: "lab5", tag: "lab · ข้อ 5", q: "ค่า connect/ttfb ก่อนและหลังหน่วง 50ms ค่าที่ทำนายไว้ และผลของ keep-alive อธิบายด้วยจำนวน RTT", mono: true }
+    ],
+    mcq: [
+      { id: "m1", q: "TCP handshake มีลำดับอย่างไร",
+        opts: ["SYN → ACK → FIN", "SYN → SYN-ACK → ACK", "ACK → SYN → SYN-ACK", "HELLO → OK → DATA"], a: 1,
+        hints: ["ฝั่ง client เริ่มด้วย flag อะไร", "server ตอบรับและขอเชื่อมต่อกลับในข้อความเดียว"],
+        why: "client ส่ง SYN, server ตอบ SYN-ACK, client ยืนยันด้วย ACK ใช้เวลา 1 RTT ก่อนเริ่มส่งข้อมูล" },
+      { id: "m2", q: "ss -tan บน app server เห็น CLOSE-WAIT หลายพันรายการและเพิ่มขึ้นเรื่อย ๆ บอกอะไร",
+        opts: ["network ช้า", "อีกฝั่งปิดแล้ว แต่ app ฝั่งนี้ไม่ยอมปิด connection (bug)", "ปกติของ server ที่ traffic สูง", "firewall DROP"], a: 1,
+        hints: ["CLOSE-WAIT คือสถานะของฝั่งที่ได้รับ FIN แล้ว", "ใครต้องเรียก close() ต่อ"],
+        why: "ได้ FIN จากอีกฝั่งแล้ว kernel รอให้ app เรียก close() ถ้าสะสมแปลว่าโค้ดลืมปิด สุดท้าย fd จะหมด" },
+      { id: "m3", q: "RTT 100ms, HTTP ธรรมดา (ไม่มี TLS) connection ใหม่ server ตอบใน 1ms เวลาถึง byte แรกประมาณเท่าไร",
+        opts: ["100ms", "200ms", "300ms", "1ms"], a: 1,
+        hints: ["นับจำนวนรอบก่อนได้ byte แรก", "handshake 1 รอบ + request/response 1 รอบ"],
+        why: "TCP handshake 1 RTT + request→response 1 RTT = ประมาณ 200ms ถ้าเพิ่ม TLS 1.3 จะเป็นประมาณ 300ms" },
+      { id: "m4", q: "ส่ง UDP ไปที่ port ที่ไม่มีใครฟัง ผู้ส่งรู้ไหม",
+        opts: ["รู้ทันที ได้ refused", "ไม่รู้ การส่งถือว่าสำเร็จ (อาจมี ICMP กลับมาแต่ไม่รับประกัน)", "ได้ timeout เสมอ", "kernel ส่งซ้ำจนกว่าจะมีคนรับ"], a: 1,
+        hints: ["UDP มี handshake ไหม", "ใครจะเป็นคนบอกผู้ส่ง"],
+        why: "UDP ไม่มี connection หรือ ACK การส่งจึงถือว่าสำเร็จเมื่อ packet ออกจากเครื่อง ถ้าต้องการความน่าเชื่อถือ app ต้องทำเอง" }
+    ],
+    quiz: [
+      { id: "q1", tag: "เข้าใจ", q: "ทำไม TCP ต้องมี handshake ก่อนส่งข้อมูล ถ้าส่ง request ใน packet แรกเลยจะเสียอะไร" },
+      { id: "q2", tag: "ประยุกต์", q: "user ที่ลอนดอนเรียก API ที่กรุงเทพ RTT 250ms HTTPS connection ใหม่ server ตอบ 10ms ประมาณเวลาถึง byte แรก และครั้งที่สองด้วย keep-alive" },
+      { id: "q3", tag: "debugging", q: "CLOSE-WAIT 3,000 รายการและเพิ่มขึ้น บอกอะไรเกี่ยวกับ app และจะเกิดอะไรต่อถ้าไม่แก้" },
+      { id: "q4", tag: "debugging", q: "connection ค้างที่ SYN-SENT ต่างจากได้ RST อย่างไร แต่ละแบบชี้ไปที่ปัญหาอะไร" },
+      { id: "q5", tag: "trade-off", q: "ทำไม HTTP/3 เลือกสร้างบน UDP แทนการปรับปรุง TCP" }
+    ],
+    challenge: [
+      { id: "c1", tag: "challenge 1", q: "Go program เปิด 100 connection แล้วไม่ปิด ดู state ทั้งสองฝั่ง แล้วฆ่า program state เปลี่ยนเป็นอะไรที่ฝั่งไหน", mono: true },
+      { id: "c2", tag: "challenge 2", q: "netem loss 10% วัด curl 20 ครั้ง min/median/max และอธิบายว่าทำไม max กระโดด", mono: true },
+      { id: "c3", tag: "challenge 3", q: "อธิบาย (ไม่เกิน 10 บรรทัด) ว่าทำไมเรียก API ภายนอก 5 ตัวต่อกันทีละตัวช้ากว่าเรียกพร้อมกันมาก ใช้ตัวเลข RTT" }
+    ]
+  },
+  {
+    id: "L10", code: "LESSON 10", phase: "Phase 3 · Web",
+    title: "DNS",
+    lede: "ชื่อกลายเป็น IP ได้อย่างไร cache อยู่ที่ไหนบ้าง ทำไมการเปลี่ยน DNS ถึงค่อย ๆ มีผล และทำไมวงการถึงพูดว่า It’s always DNS",
+    source: "lessons/10-dns/README.md",
+    overview: `
+      <ul>
+        <li>ลำดับชั้น: root → TLD → authoritative · <b>recursive resolver</b> เดินถามแทนแล้ว cache ตาม <b>TTL</b></li>
+        <li>record: A · AAAA · CNAME · NS · MX · TXT</li>
+        <li>“propagation” = cache หมดอายุตาม TTL · ลด TTL <b>ก่อน</b> ย้าย IP</li>
+        <li>NXDOMAIN = ไม่มีชื่อนี้ · SERVFAIL = หาคำตอบไม่ได้ · timeout = ติดต่อ DNS ไม่ได้</li>
+        <li><b><code>dig</code> ข้าม <code>/etc/hosts</code></b> · อยากรู้ว่า app เห็นอะไรใช้ <code>getent hosts</code></li>
+      </ul>
+      <div class="caveat">ใช้ <code>pixbin.test</code> ไม่ใช้ <code>.local</code> เพราะ macOS จะไปถาม Bonjour ก่อนและช้ามาก</div>`,
+    diagram:
+`app ─► /etc/hosts
+    └► stub resolver 127.0.0.53 (cache)
+         └► recursive resolver 1.1.1.1 (cache)
+              ├► root:  "ถาม .com ที่ ..."
+              ├► .com:  "ถาม ns ของ example.com ที่ ..."
+              └► authoritative: "A 104.20.23.154 TTL 300"`,
+    lab: [
+      { id: "s1", title: "อ่านคำตอบ", cmd: "dig example.com", note: "status, TTL, IP, ใครตอบ, เวลา" },
+      { id: "s2", title: "cache และ TTL", cmd: "dig github.com | grep -E \"IN\\s+A|Query time\"   # 2 ครั้ง, รอ 10s, อีกครั้ง", note: "" },
+      { id: "s3", title: "เดินตามลำดับชั้น", cmd: "dig +trace example.com", note: "" },
+      { id: "s4", title: "record หลายชนิด", cmd: "dig www.github.com +noall +answer\ndig NS github.com +short\ndig MX gmail.com +short", note: "" },
+      { id: "s5", title: "dig ไม่เห็น /etc/hosts", cmd: "echo \"127.0.0.1 pixbin.test\" | sudo tee -a /etc/hosts\ndig pixbin.test +short; getent hosts pixbin.test; curl pixbin.test:8000/", note: "" },
+      { id: "s6", title: "pixbin.test บน Mac", cmd: "echo \"<IP VM> pixbin.test\" | sudo tee -a /etc/hosts\ndscacheutil -q host -a name pixbin.test", note: "ใช้ต่อใน L11–13" },
+      { id: "s7", title: "ความล้มเหลว 3 แบบ", cmd: "dig this-name-does-not-exist-xyz123.com | grep status\ndig dnssec-failed.org @1.1.1.1 | grep status\ndig example.com @192.0.2.53 +time=2 +tries=1", note: "" },
+      { id: "s8", title: "ทำ DNS ของ VM พัง", cmd: "sudo resolvectl dns enp0s1 192.0.2.53; sudo resolvectl flush-caches\ncurl -m 5 https://example.com; curl -m 5 https://1.1.1.1\nsudo resolvectl revert enp0s1", note: "" }
+    ],
+    labSubmit: [
+      { id: "lab5", tag: "lab · ข้อ 5", q: "ผลของ dig, getent และ curl กับ pixbin.test และอธิบายว่าทำไมเห็นไม่เหมือนกัน", mono: true },
+      { id: "lab78", tag: "lab · ข้อ 7–8", q: "ผล 3 แบบในข้อ 7 ความหมายของแต่ละแบบ และผลของข้อ 8 ตอนใช้ชื่อเทียบกับใช้ IP", mono: true }
+    ],
+    mcq: [
+      { id: "m1", q: "ใส่ชื่อใน /etc/hosts แล้ว dig ไม่เห็น ควรใช้คำสั่งไหนดูสิ่งที่ app เห็นจริง",
+        opts: ["nslookup", "getent hosts", "dig +trace", "ping -c 1 8.8.8.8"], a: 1,
+        hints: ["dig ถามใครโดยตรง", "app ส่วนใหญ่ใช้ getaddrinfo ซึ่งดู /etc/nsswitch.conf"],
+        why: "dig ถาม DNS server ตรง ๆ ข้าม /etc/hosts ส่วน getent hosts ใช้ลำดับเดียวกับ app (files แล้วค่อย dns)" },
+      { id: "m2", q: "status: NXDOMAIN หมายความว่าอะไร",
+        opts: ["DNS server ล่ม", "ชื่อนี้ไม่มีอยู่จริง", "timeout", "มีชื่อแต่ไม่มี AAAA"], a: 1,
+        hints: ["NX = non-existent", "นี่เป็นคำตอบที่ชัดเจนจาก authoritative ไม่ใช่ความล้มเหลวในการติดต่อ"],
+        why: "NXDOMAIN คือคำตอบว่าชื่อไม่มีอยู่ และคำตอบนี้ถูก cache ไว้ด้วย (negative cache) พิมพ์ผิดแล้วแก้จึงยังพังอยู่สักพัก" },
+      { id: "m3", q: "อยากย้าย IP ของเว็บ ให้ทุกคนเห็น IP ใหม่ภายใน 1 นาที ควรทำอะไร",
+        opts: ["เปลี่ยน IP แล้ว flush cache ของตัวเอง", "ลด TTL เหลือ 60 วินาทีล่วงหน้าอย่างน้อยเท่ากับ TTL เดิม แล้วค่อยเปลี่ยน IP", "เพิ่ม TTL", "ลบ record ทิ้งก่อน"], a: 1,
+        hints: ["resolver ทั่วโลกเก็บคำตอบเก่าไว้นานเท่าไร", "TTL ใหม่มีผลกับ cache ที่เก็บไปแล้วไหม"],
+        why: "cache ที่มีอยู่จะเก็บต่อจนครบ TTL เดิม ต้องลด TTL ไว้ก่อนแล้วรอให้ cache เก่าหมด ค่อยเปลี่ยน IP" },
+      { id: "m4", q: "recursive resolver (เช่น 1.1.1.1) ทำหน้าที่อะไร",
+        opts: ["เก็บ record ของทุกโดเมนในโลก", "เดินถาม root → TLD → authoritative แทน client แล้ว cache คำตอบตาม TTL", "เป็นเจ้าของโดเมน", "เข้ารหัส HTTP"], a: 1,
+        hints: ["ใครเป็นคนรู้คำตอบจริง", "ถ้า client ต้องถามเองทุกชั้นทุกครั้งจะช้าแค่ไหน"],
+        why: "resolver เป็นผู้ช่วยที่ถามแทนและจำคำตอบไว้ ส่วนคำตอบจริงอยู่ที่ authoritative server ของแต่ละโดเมน" }
+    ],
+    quiz: [
+      { id: "q1", tag: "เข้าใจ", q: "ทำไม DNS ออกแบบเป็นลำดับชั้นแทนที่จะมี database กลางที่เดียว" },
+      { id: "q2", tag: "ประยุกต์", q: "TTL 3600 เปลี่ยน IP ตอน 10:00 ทุกคนจะเห็น IP ใหม่แน่นอนเมื่อไร (worst case) และควรทำอะไรก่อนถ้าอยากให้เสร็จใน 1 นาที" },
+      { id: "q3", tag: "debugging", q: "“dig api.internal ไม่มีผล แต่ app ในเครื่องเดียวกันเรียกได้” เป็นไปได้อย่างไร จะดูสิ่งที่ app เห็นจริงด้วยคำสั่งอะไร" },
+      { id: "q4", tag: "debugging", q: "DNS_PROBE_FINISHED_NXDOMAIN กับ “took too long to respond” ปัญหาอยู่คนละชั้นอย่างไร" },
+      { id: "q5", tag: "trade-off", q: "ทำ failover ด้วยการเปลี่ยน DNS ไป server สำรอง มีข้อจำกัดอะไร และ load balancer แก้ข้อไหนได้" }
+    ],
+    challenge: [
+      { id: "c1", tag: "challenge 1", q: "วาง dnscheck.sh ที่ถามชื่อเดียวกันจาก resolver 3 ตัวและ authoritative และผลกับ github.com พร้อมอธิบายความต่าง", mono: true },
+      { id: "c2", tag: "challenge 2", q: "วัด time_namelookup และ time_connect ของเว็บที่ไม่เคยเข้า 2 ครั้ง เทียบกัน และอธิบายว่าทำไม time_connect รวม DNS", mono: true },
+      { id: "c3", tag: "challenge 3", q: "tcpdump port 53 ขณะ curl https://github.com ครั้งแรก มีการถามกี่ครั้ง ชนิดอะไร และทำไม", mono: true }
+    ]
+  },
+  {
+    id: "L11", code: "LESSON 11", phase: "Phase 3 · Web",
+    title: "HTTP และ Reverse Proxy",
+    lede: "มองข้อความ HTTP ดิบ ๆ บน TCP แล้ววาง nginx ไว้หน้า pixbin ให้คนนอกเข้าได้ที่ port 80 โดยที่ pixbin ยังฟังแค่ 127.0.0.1",
+    source: "lessons/11-http-and-reverse-proxy/README.md",
+    overview: `
+      <ul>
+        <li>HTTP = ข้อความ: request line + headers + บรรทัดว่าง + body · response ขึ้นต้นด้วย status</li>
+        <li><code>Host</code> header ทำให้หลายเว็บใช้ IP เดียวกันได้</li>
+        <li>4xx = client ผิด · 5xx = server ผิด · <b>502</b> proxy ต่อ app ไม่ได้ · <b>504</b> app ตอบช้าเกิน</li>
+        <li>reverse proxy เปิด connection ใหม่ไปหา app → app เห็น 127.0.0.1 ต้องอ่าน IP จริงจาก <code>X-Forwarded-For</code></li>
+        <li>เจอ 502/504 → ดู error log ของ proxy ก่อน · <code>nginx -t</code> ก่อน reload เสมอ</li>
+      </ul>`,
+    diagram:
+`Mac ──TCP:80──► nginx 0.0.0.0:80 (access/error log, limits)
+                   │ proxy_pass (TCP ใหม่) + X-Forwarded-For
+                   ▼
+                pixbin 127.0.0.1:8000
+<span class="c"> connect ไม่ได้ → 502 · ตอบช้ากว่า proxy_read_timeout → 504 · body ใหญ่ → 413</span>`,
+    lab: [
+      { id: "s1", title: "HTTP ด้วยมือ", cmd: "printf 'GET / HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' | nc 127.0.0.1 8000", note: "ลองส่ง HELLO ดูด้วย" },
+      { id: "s2", title: "curl -v", cmd: "curl -v http://localhost:8000/files", note: "> ส่งไป · < ได้กลับ · * ข้อมูลของ curl" },
+      { id: "s3", title: "ติดตั้ง nginx + config", cmd: "sudo apt install -y nginx\n# วาง /etc/nginx/sites-available/pixbin ตามบทเรียน\nsudo nginx -t && sudo systemctl reload nginx\nsudo ufw allow 80/tcp", note: "" },
+      { id: "s4", title: "เข้าจาก Mac", cmd: "curl http://pixbin.test/\ncurl -I http://pixbin.test/", note: "you came from vs forwarded for" },
+      { id: "s5", title: "413", cmd: "head -c 2000000 /dev/urandom > /tmp/2m.bin\ncurl -w ' %{http_code}\\n' --data-binary @/tmp/2m.bin http://pixbin.test/upload", note: "pixbin เห็น request นี้ไหม แล้วแก้ด้วย client_max_body_size" },
+      { id: "s6", title: "504", cmd: "curl -w ' %{http_code} %{time_total}s\\n' \"http://pixbin.test/work/sleep?ms=8000\"", note: "" },
+      { id: "s7", title: "502", cmd: "sudo systemctl stop pixbin\n# Mac: curl -w ' %{http_code}\\n' http://pixbin.test/\nsudo systemctl start pixbin", note: "" },
+      { id: "s8", title: "default server", cmd: "curl -H \"Host: other.test\" http://pixbin.test/", note: "เพิ่ม block return 444" }
+    ],
+    labSubmit: [
+      { id: "lab4", tag: "lab · ข้อ 4", q: "ผล curl จาก Mac (you came from / forwarded for / header Server) และอธิบายว่าแต่ละค่ามาจากไหน", mono: true },
+      { id: "lab57", tag: "lab · ข้อ 5–7", q: "error log ของ nginx ในกรณี 413, 504, 502 และบอกว่าแต่ละกรณีใครตอบ และ pixbin รู้เรื่องไหม", mono: true }
+    ],
+    mcq: [
+      { id: "m1", q: "nginx ตอบ 502 Bad Gateway หมายถึงอะไร",
+        opts: ["client ส่ง request ผิดรูปแบบ", "nginx ต่อไปหา upstream (app) ไม่สำเร็จ หรือ app ตอบกลับมาผิดปกติ", "certificate หมดอายุ", "DNS พัง"], a: 1,
+        hints: ["ใครเป็นคนสร้าง response 502", "gateway ในที่นี้คือตัวกลางที่ส่งต่อ"],
+        why: "502 เป็นคำตอบของ proxy ว่าข้างหลังมีปัญหา เช่น connection refused หรือ app ตัด connection กลางคัน ให้ดู error log ของ proxy ก่อน" },
+      { id: "m2", q: "upload ไฟล์ 2 MB ผ่าน nginx แล้วได้ 413 ทั้งที่ pixbin ไม่มี limit เพราะ",
+        opts: ["pixbin ปฏิเสธ", "nginx มี client_max_body_size default 1 MB", "disk เต็ม", "TLS"], a: 1,
+        hints: ["ดู journal ของ pixbin ว่าเห็น request นี้ไหม", "ถ้า pixbin ไม่เห็น ใครปฏิเสธ"],
+        why: "nginx ปฏิเสธตั้งแต่ก่อนส่งต่อ default ของ client_max_body_size คือ 1m" },
+      { id: "m3", q: "ทำไม pixbin ที่อยู่หลัง nginx เห็น RemoteAddr เป็น 127.0.0.1",
+        opts: ["Mac ใช้ IP 127.0.0.1", "nginx เปิด TCP connection ใหม่ไปหา pixbin เองจากในเครื่อง", "NAT ของ Mac", "bug ของ Go"], a: 1,
+        hints: ["connection ที่ pixbin รับ เริ่มจากใคร", "IP ของ user จริงถูกส่งไปทางไหนแทน"],
+        why: "proxy เป็นคนเชื่อมต่อไปหา app เอง app จึงเห็น proxy เป็นผู้เรียก IP จริงต้องส่งผ่าน header X-Forwarded-For หรือ X-Real-IP" },
+      { id: "m4", q: "ก่อน reload nginx หลังแก้ config ควรทำอะไร",
+        opts: ["restart เครื่อง", "sudo nginx -t", "ลบ log", "stop pixbin"], a: 1,
+        hints: ["config ผิดจะทำให้เกิดอะไร", "มีคำสั่งตรวจ syntax โดยไม่ต้องใช้จริง"],
+        why: "nginx -t ตรวจ config ก่อน ถ้าผิด reload จะถูกปฏิเสธ แต่ถ้า restart ด้วย config ผิด nginx จะไม่ขึ้นเลยและเว็บล่มทั้งหมด" }
+    ],
+    quiz: [
+      { id: "q1", tag: "เข้าใจ", q: "header Host แก้ปัญหาอะไร ก่อนมีมันการมีหลายเว็บบน IP เดียวทำได้ไหม" },
+      { id: "q2", tag: "ประยุกต์", q: "user เห็น 504 ตอนสร้าง report แต่ log ของ app บอกว่าสร้างเสร็จใน 70 วินาทีและสำเร็จ เกิดอะไรขึ้น user ควรกดใหม่ไหม" },
+      { id: "q3", tag: "debugging", q: "502 + error log 'Connection refused' แต่ systemctl status pixbin บอก running ตั้ง hypothesis และคำสั่งพิสูจน์" },
+      { id: "q4", tag: "architecture", q: "เครื่องเดียวรัน pixbin.test และ admin.pixbin.test โดย admin เข้าได้เฉพาะ IP ออฟฟิศ ออกแบบโครง config ของ nginx" },
+      { id: "q5", tag: "trade-off", q: "ทำไมไม่ให้ app เชื่อ X-Forwarded-For ทุกกรณี ถ้ามี proxy สองชั้น (CDN → nginx → app) ต้องระวังอะไร" }
+    ],
+    challenge: [
+      { id: "c1", tag: "challenge 1", q: "location /admin อนุญาตเฉพาะ IP ของ Mac และตอบ 403 คนอื่น วาง config และผลทดสอบ", mono: true },
+      { id: "c2", tag: "challenge 2", q: "rate limit /upload ไม่เกิน 2 req/s ต่อ IP วาง config ผลทดสอบ และจำนวน 503/429 ที่ได้", mono: true },
+      { id: "c3", tag: "challenge 3", q: "log format ที่มี $upstream_response_time และ $request_time แล้วใช้พิสูจน์ว่าเวลาของ /work/sleep?ms=300 หายไปที่ไหน", mono: true }
+    ]
+  },
+  {
+    id: "L12", code: "LESSON 12", phase: "Phase 3 · Web",
+    title: "TLS และ HTTPS",
+    lede: "เข้ารหัส ป้องกันการแก้ และพิสูจน์ว่าคุยกับตัวจริง สร้าง CA ของตัวเอง ทำให้ https://pixbin.test ใช้งานได้ และเห็นกับตาว่า cert หมดอายุทำระบบล่มอย่างไร",
+    source: "lessons/12-tls-https/README.md",
+    overview: `
+      <ul>
+        <li>TLS = อ่านไม่ได้ + แก้ไม่ได้ + <b>คุยกับตัวจริง</b> ข้อสุดท้ายมาจาก certificate + CA</li>
+        <li>client ตรวจ 4 อย่าง: chain ถึง root ที่เชื่อ · ชื่อตรง <b>SAN</b> · ยังไม่หมดอายุ · server ถือ private key จริง</li>
+        <li>ส่ง intermediate ให้ครบ · <b>SNI</b> บอกชื่อตั้งแต่ข้อความแรกเพื่อเลือก cert</li>
+        <li>TLS 1.3 = 1 RTT เพิ่มจาก TCP · TLS termination ที่ nginx แล้วส่ง HTTP ต่อให้ app</li>
+        <li>cert หมดอายุ = ล่มทั้งระบบทั้งที่ทุก service เขียว → automate + monitor แยกกัน</li>
+      </ul>
+      <div class="caveat">เครื่องมือหลัก: <code>openssl s_client -connect host:443 -servername host</code></div>`,
+    diagram:
+`Client                                     Server
+  │── ClientHello (SNI, key share) ──────►│
+  │◄── ServerHello + Certificate + Verify ─│
+  │  ตรวจ: chain / SAN / วันหมดอายุ / ลายเซ็น
+  │── Finished + HTTP (เข้ารหัส) ────────►│
+<span class="c"> Root CA → (Intermediate) → pixbin.test</span>`,
+    lab: [
+      { id: "s1", title: "ดู TLS ของเว็บจริง", cmd: "echo | openssl s_client -connect example.com:443 -servername example.com 2>/dev/null | grep -E \"^ *[0-9] s:|^ *i:|Verify return code|Protocol\"", note: "" },
+      { id: "s2", title: "สร้าง CA + cert", cmd: "mkdir -p ~/pki && cd ~/pki\n# 3 ขั้นตามบทเรียนข้อ 6\nopenssl verify -CAfile ca.crt pixbin.crt", note: "" },
+      { id: "s3", title: "nginx + TLS", cmd: "sudo install -m 600 ~/pki/pixbin.key /etc/pixbin/tls/pixbin.key\n# config ตามบทเรียนข้อ 7.3\nsudo nginx -t && sudo systemctl reload nginx\nsudo ufw allow 443/tcp", note: "" },
+      { id: "s4", title: "Mac ยังไม่เชื่อ CA", cmd: "curl https://pixbin.test/\nmultipass transfer lab:/home/ubuntu/pki/ca.crt ./pixbin-lab-ca.crt\ncurl --cacert pixbin-lab-ca.crt https://pixbin.test/", note: "" },
+      { id: "s5", title: "ต้นทุนของ HTTPS", cmd: "curl --cacert pixbin-lab-ca.crt -so /dev/null -w \"connect=%{time_connect} tls=%{time_appconnect}\\n\" https://pixbin.test/files", note: "" },
+      { id: "s6", title: "ชื่อไม่ตรง", cmd: "curl --cacert pixbin-lab-ca.crt https://www.pixbin.test/\ncurl --cacert pixbin-lab-ca.crt https://<IP VM>/", note: "ใครปฏิเสธ client หรือ server" },
+      { id: "s7", title: "cert หมดอายุ", cmd: "faketime '2020-01-01 00:00:00' openssl x509 -req -in pixbin.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 1 -extfile san.ext -out expired.crt", note: "ติดตั้ง ทดสอบ แล้วคืนค่า" }
+    ],
+    labSubmit: [
+      { id: "lab4", tag: "lab · ข้อ 4", q: "error แรกจาก Mac และผลหลังใช้ --cacert พร้อมอธิบายว่า --cacert แก้ด้วยหลักอะไร", mono: true },
+      { id: "lab67", tag: "lab · ข้อ 6–7", q: "error ของชื่อไม่ตรง (www และ IP) และ cert หมดอายุ แต่ละแบบตรวจไม่ผ่านขั้นไหน และตอนนั้น systemctl status เป็นอย่างไร", mono: true }
+    ],
+    mcq: [
+      { id: "m1", q: "ข้อไหนไม่ใช่สิ่งที่ client ตรวจระหว่าง TLS handshake",
+        opts: ["chain ต่อถึง root CA ที่เชื่อถือ", "ชื่อที่เรียกตรงกับ SAN ใน cert", "cert ยังไม่หมดอายุ", "server มี CPU เหลือพอ"], a: 3,
+        hints: ["client ต้องการพิสูจน์อะไรเกี่ยวกับ server", "เรื่องไหนไม่เกี่ยวกับตัวตนหรือความถูกต้องของ cert"],
+        why: "client ตรวจตัวตน (chain, ชื่อ, อายุ, การถือ private key) ไม่ได้ตรวจสุขภาพของ server" },
+      { id: "m2", q: "curl: (60) unable to get local issuer certificate หมายถึงอะไร",
+        opts: ["cert หมดอายุ", "client ไม่รู้จักหรือไม่เชื่อ CA ที่ออก cert (หรือ server ส่ง intermediate ไม่ครบ)", "ชื่อไม่ตรง", "port 443 ปิด"], a: 1,
+        hints: ["issuer คือใคร", "client ไล่ลายเซ็นขึ้นไปแล้วหยุดที่ไหน"],
+        why: "client ไล่ chain ไปไม่ถึง root ที่อยู่ใน trust store อาจเพราะ CA ไม่เป็นที่รู้จัก (เช่น CA ของ lab) หรือ server ไม่ได้ส่ง intermediate มา" },
+      { id: "m3", q: "ทำ TLS termination ที่ nginx แล้ว ระหว่าง nginx กับ pixbin เป็นอย่างไร",
+        opts: ["เข้ารหัสด้วย cert เดียวกัน", "เป็น HTTP ธรรมดา (ในตัวอย่างนี้อยู่ในเครื่องเดียวกันผ่าน loopback)", "ใช้ UDP", "ไม่มี connection"], a: 1,
+        hints: ["termination แปลว่าอะไรจบที่ nginx", "ใน capstone ส่วน B ลองดู tcpdump ที่ lo:8000"],
+        why: "nginx ถอดรหัสแล้วส่ง HTTP ต่อให้ app ถ้า app อยู่อีกเครื่อง ต้องคิดว่าจะเข้ารหัสช่วงนั้นต่อหรือไม่" },
+      { id: "m4", q: "cert หมดอายุ systemctl status nginx และ pixbin จะแสดงว่าอะไร",
+        opts: ["failed ทั้งคู่", "active (running) ทั้งคู่ ทั้งที่ user เข้าไม่ได้", "nginx failed เท่านั้น", "pixbin restart วนไม่หยุด"], a: 1,
+        hints: ["process ตายไหมเมื่อ cert หมดอายุ", "ใครเป็นคนปฏิเสธ connection"],
+        why: "client เป็นคนปฏิเสธ cert ส่วน process ทุกตัวยังปกติ ต้อง monitor วันหมดอายุของ cert แยกต่างหาก" }
+    ],
+    quiz: [
+      { id: "q1", tag: "เข้าใจ", q: "ถ้าเข้ารหัสแต่ไม่ตรวจ certificate (curl -k) ยังเสี่ยงอะไร ยกตัวอย่างการโจมตีที่ทำได้" },
+      { id: "q2", tag: "ประยุกต์", q: "user Tokyo เรียก https://pixbin.com ครั้งแรก RTT 80ms DNS 20ms ประมาณเวลาถึง byte แรกแยกทีละขั้น และถ้าเป็น TLS 1.2 เพิ่มเท่าไร" },
+      { id: "q3", tag: "debugging", q: "เว็บใช้ได้บน Chrome ในคอม แต่ Android รุ่นเก่าเชื่อมต่อไม่ได้ด้วย error เรื่อง cert ตั้ง hypothesis 2 ข้อและวิธีพิสูจน์" },
+      { id: "q4", tag: "architecture", q: "pixbin.com, www.pixbin.com, api.pixbin.com ต้องการ cert กี่ใบ SAN อะไร ข้อดีข้อเสียของ wildcard *.pixbin.com" },
+      { id: "q5", tag: "trade-off", q: "ทีมเสนอ cert อายุ 5 ปีจะได้ไม่ต้องยุ่ง จะแย้งอย่างไร (อย่างน้อย 2 เหตุผล)" }
+    ],
+    challenge: [
+      { id: "c1", tag: "challenge 1", q: "cert ที่ใช้ได้ทั้ง pixbin.test และ www.pixbin.test และให้ www redirect 301 ไป pixbin.test วางคำสั่งและผลทดสอบ", mono: true },
+      { id: "c2", tag: "challenge 2", q: "ออก cert ไม่มี SAN ติดตั้ง บันทึก error ของ curl และอธิบายว่าทำไมมาตรฐานปัจจุบันไม่ดู CN", mono: true },
+      { id: "c3", tag: "challenge 3", q: "วาง certcheck.sh ที่ exit ไม่เป็น 0 เมื่อเหลือน้อยกว่า 14 วัน และผลกับ cert ปกติ, expired และเว็บจริง 2 เว็บ", mono: true }
+    ]
+  },
+  {
+    id: "L13", code: "LESSON 13", phase: "Milestone 1 · Capstone",
+    title: "Capstone: request หนึ่งตัว ตั้งแต่พิมพ์ URL จนถึง disk",
+    lede: "ต่อทุกชิ้นจาก L01–L12 เข้าด้วยกัน ตามรอย request ผ่านทุกชั้นพร้อมกัน แล้วรับมือ incident ที่ไม่รู้ล่วงหน้าว่าพังตรงไหน ผ่านบทนี้ = ผ่าน Milestone 1",
+    source: "lessons/13-milestone-1-capstone/README.md",
+    overview: `
+      <p><b>อาการแรกบอกชั้น:</b></p>
+      <ul>
+        <li>resolve ไม่ได้ → DNS · timeout ตอน connect → route / firewall DROP · refused → ไม่มีใครฟัง</li>
+        <li>TLS error → cert · 4xx → config ของ proxy หรือ request · 502/504 → nginx ↔ pixbin · 500 → app / disk / permission</li>
+        <li><b>ตัดครึ่ง pipeline:</b> <code>curl 127.0.0.1:8000/healthz</code> บน VM ผ่าน = ปัญหาอยู่ก่อนหน้า</li>
+        <li><b>สถานะเขียว ≠ ใช้งานได้</b> — ทดสอบแบบที่ user ใช้จริง</li>
+      </ul>
+      <div class="caveat">Drill: <code>sudo install -m 755 break.sh fix.sh reveal.sh /usr/local/sbin/</code> แล้ว <code>sudo break.sh</code> ห้ามอ่าน script ก่อนจบ drill ทำอย่างน้อย 5 drill</div>`,
+    diagram:
+`Mac ─ /etc/hosts ─ route ─► ufw (22,80,443)
+  ─► nginx :443 TLS termination (cert /etc/pixbin/tls)
+       │ HTTP + X-Forwarded-*
+       ▼ 127.0.0.1:8000
+     pixbin (systemd, User=pixbin, sandbox)
+       ▼
+     /var/lib/pixbin (pixbin:pixbin 750)`,
+    lab: [
+      { id: "s1", title: "ส่วน A: ตรวจว่าระบบครบ", cmd: "systemctl is-active pixbin nginx\nsudo ss -tlnp | grep -E ':(80|443|8000)\\s'\nsudo ufw status", note: "รายการเต็มอยู่ในบทเรียน" },
+      { id: "s2", title: "ส่วน B: ตามรอย request", cmd: "sudo tcpdump -i any -n -A 'tcp port 443'   # V1\nsudo tcpdump -i lo -n -A 'tcp port 8000'   # V2\n# Mac: echo \"hello capstone\" | curl --cacert pixbin-lab-ca.crt --data-binary @- https://pixbin.test/upload", note: "V3 access log, V4 journal" },
+      { id: "s3", title: "ส่วน C: ติดตั้ง drill", cmd: "cd ~/cloud-infra-learn/lessons/13-milestone-1-capstone/drills\nsudo install -m 755 break.sh fix.sh reveal.sh /usr/local/sbin/", note: "" },
+      { id: "s4", title: "drill 1", cmd: "sudo break.sh", note: "เขียน incident report ส่งด้านล่าง" },
+      { id: "s5", title: "drill 2", cmd: "sudo break.sh", note: "" },
+      { id: "s6", title: "drill 3", cmd: "sudo break.sh", note: "" },
+      { id: "s7", title: "drill 4", cmd: "sudo break.sh", note: "" },
+      { id: "s8", title: "drill 5", cmd: "sudo break.sh", note: "สุ่มได้ซ้ำให้เลือกเลขเอง sudo break.sh <เลข>" }
+    ],
+    labSubmit: [
+      { id: "labB", tag: "ส่วน B", q: "ตอบ 4 คำถามของส่วน B: อ่าน hello capstone ได้ที่ V1/V2 ไหม, X-Forwarded-For มาจากไหน, เวลาใน log สองที่ต่างกันเท่าไร, ไฟล์อยู่ที่ไหน owner ใคร", mono: true },
+      { id: "d1", tag: "drill report 1", q: "incident report ตาม template (อาการ, hypotheses, คำสั่ง→ผล→สรุป, ต้นเหตุ, หลักฐาน, วิธีแก้, การป้องกัน)", mono: true },
+      { id: "d2", tag: "drill report 2", q: "incident report ตาม template", mono: true },
+      { id: "d3", tag: "drill report 3", q: "incident report ตาม template", mono: true },
+      { id: "d4", tag: "drill report 4", q: "incident report ตาม template", mono: true },
+      { id: "d5", tag: "drill report 5", q: "incident report ตาม template", mono: true }
+    ],
+    mcq: [
+      { id: "m1", q: "curl https://pixbin.test จาก Mac ค้างแล้ว timeout ตอน connect ควรสงสัยชั้นไหนก่อน",
+        opts: ["pixbin crash", "route หรือ firewall ที่ DROP packet", "cert หมดอายุ", "disk เต็ม"], a: 1,
+        hints: ["handshake TCP สำเร็จหรือยัง", "ถ้า packet ถึงเครื่องแล้วไม่มีคนฟัง จะได้อะไรแทน timeout"],
+        why: "timeout ตอน connect แปลว่าไม่ได้คำตอบใด ๆ กลับมา จึงชี้ไปที่ packet ถูกทิ้ง (firewall DROP) หรือไปไม่ถึง (route) ปัญหาชั้นบนกว่านั้นต้อง connect ได้ก่อน" },
+      { id: "m2", q: "ได้ 504 หลัง 5 วินาที และ systemctl status pixbin บอก active (running) น่าจะเป็นอะไร",
+        opts: ["nginx ไม่ได้รัน", "pixbin ยังอยู่แต่ไม่ตอบ (ค้าง ถูกแช่แข็ง หรือรอบางอย่างนาน)", "DNS พัง", "firewall ปิด 443"], a: 1,
+        hints: ["504 มาจากใครและหมายถึงอะไร", "systemd รู้อะไรเกี่ยวกับ process และไม่รู้อะไร"],
+        why: "504 = nginx ต่อ pixbin ได้แต่ไม่ได้คำตอบภายใน proxy_read_timeout ส่วน systemd เห็นแค่ว่า process ยังอยู่ ตรวจด้วย curl 127.0.0.1:8000 และดูสถานะ process" },
+      { id: "m3", q: "จาก Mac ได้ connection refused ทันทีที่ 443 แต่บน VM curl 127.0.0.1:8000/healthz ผ่าน ต้นเหตุที่เป็นไปได้มากที่สุด",
+        opts: ["pixbin crash", "ไม่มีใครฟังที่ 443 เช่น nginx หยุดทำงาน (หรือ firewall ตั้งเป็น REJECT)", "cert ผิด", "disk เต็ม"], a: 1,
+        hints: ["refused เกิดขึ้นเมื่อไร", "ตัดครึ่ง pipeline: ส่วนหลังปกติแล้ว ส่วนไหนที่เหลือ"],
+        why: "refused ทันที = ถึงเครื่องแล้วแต่ไม่มี socket ฟัง port นั้น (หรือ REJECT) เมื่อ pixbin ปกติ จึงเหลือ nginx ตรวจด้วย ss -tlnp และ systemctl status nginx" },
+      { id: "m4", q: "เมื่อได้รับแจ้ง incident หลักฐานชิ้นแรกที่ควรเก็บคืออะไร",
+        opts: ["restart ทุกอย่างก่อน", "error ที่เห็นแบบเป๊ะ ๆ (ข้อความ, status code, เวลา) จากตำแหน่งของ user", "อ่านโค้ดทั้งหมด", "เพิ่ม RAM"], a: 1,
+        hints: ["อะไรหายไปถ้า restart ก่อน", "อาการแรกบอกชั้นของปัญหา"],
+        why: "อาการที่แม่นยำบอกว่าปัญหาอยู่ชั้นไหน การ restart ก่อนเก็บหลักฐานอาจทำให้อาการหายไปโดยไม่รู้ต้นเหตุ แล้วเกิดซ้ำ" }
+    ],
+    quiz: [
+      { id: "q1", tag: "เข้าใจ", q: "ในเส้นทาง request 10 ขั้น ขั้นไหนเกิดใน kernel ขั้นไหนเกิดใน user space ความต่างนี้สำคัญอย่างไรตอน debug" },
+      { id: "q2", tag: "ประยุกต์", q: "ถ้า nginx ส่งต่อไป pixbin อีกเครื่อง (192.168.64.6:8000) ต้องเปลี่ยนอะไรใน pixbin, firewall และมีความเสี่ยงอะไรเพิ่ม" },
+      { id: "q3", tag: "debugging", q: "“upload ได้บ้างไม่ได้บ้าง ไม่มี pattern” ตั้ง hypothesis อย่างน้อย 4 ข้อจากคนละชั้น พร้อมลำดับการตรวจและเหตุผล" },
+      { id: "q4", tag: "architecture", q: "มี 2 VM รัน pixbin อยากให้ user เข้าได้ทั้งคู่ และเครื่องหนึ่งตายแล้ว user ไม่รู้สึก ต้องเพิ่มอะไร และเกิดปัญหาใหม่อะไรกับไฟล์ที่ upload" },
+      { id: "q5", tag: "trade-off", q: "เสนอรวม nginx เข้าไปใน pixbin (Go ทำ TLS และ limit เอง) เห็นด้วยไหม สถานการณ์ไหนที่สมเหตุสมผล" }
+    ],
+    challenge: [
+      { id: "baseline", tag: "ส่วน D", q: "ตอบคำถาม Baseline 5 ข้อใหม่ทั้งหมดโดยไม่ดูคำตอบเก่า แล้วเทียบว่าอะไรที่เมื่อก่อนไม่รู้หรือเข้าใจผิด" },
+      { id: "teach", tag: "ส่วน E", q: "เอกสาร 1 หน้า “เกิดอะไรขึ้นเมื่อพิมพ์ https://pixbin.test” สำหรับ dev ใหม่ มี diagram ทุกขั้น และ “ถ้าเห็น error X ให้ดูที่ Y”", mono: true },
+      { id: "c1", tag: "challenge 1", q: "drill #9 ของคุณเอง: วางส่วนที่เพิ่มใน break/reveal/fix และอธิบายว่ามันฝึกทักษะอะไร", mono: true },
+      { id: "c2", tag: "challenge 2", q: "rebuild from scratch: ใช้เวลาเท่าไร และจุดไหนบ้างที่ต้องกลับไปเปิดบทเรียน" }
+    ]
+  },
+  { id: "L14", code: "MILESTONE 2", phase: "Milestone 2", locked: true, title: "Virtualization และ Containers" }
 ];
 
 const VERDICT = {
@@ -268,7 +1055,14 @@ function statusOf(key) {
 function renderRail() {
   const list = document.getElementById("lessonList");
   list.innerHTML = "";
+  let lastGroup = "";
   for (const l of COURSE) {
+    const group = (l.phase || "").split(" · ")[0];
+    if (group && group !== lastGroup) {
+      const g = document.createElement("li");
+      g.className = "group"; g.textContent = group;
+      list.appendChild(g); lastGroup = group;
+    }
     const li = document.createElement("li");
     const b = document.createElement("button");
     b.disabled = !!l.locked;
@@ -352,12 +1146,22 @@ async function submit(lesson, item, ta, el) {
 }
 
 /* ---------- MCQ ---------- */
+// ลำดับตัวเลือกคงที่ต่อคำถาม (seed จาก id) แต่ตำแหน่งคำตอบไม่ซ้ำรูปแบบเดิม
+function shuffledOrder(n, seedText) {
+  let h = 2166136261;
+  for (const c of seedText) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
+  const rand = () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return (h >>> 0) / 4294967296; };
+  const order = [...Array(n).keys()];
+  for (let i = n - 1; i > 0; i--) { const k = Math.floor(rand() * (i + 1)); [order[i], order[k]] = [order[k], order[i]]; }
+  return order;
+}
 function mcqCard(lesson, m, i) {
   const key = "infra:mcq:" + keyOf(lesson.id, m.id);
   let st; try { st = JSON.parse(ls.get(key) || "null"); } catch { st = null; }
   st = st || { wrong: [], solved: false };
   const el = document.createElement("div");
   el.className = "q";
+  const order = shuffledOrder(m.opts.length, key);
   const draw = () => {
     const revealed = st.solved || st.wrong.length >= 3;
     const chip = st.solved ? `<span class="chip correct">ถูก</span>` : st.wrong.length >= 3 ? `<span class="chip incorrect">ดูเฉลยแล้ว</span>` : st.wrong.length ? `<span class="chip partial">ลองอีกครั้ง</span>` : `<span class="chip">ยังไม่ตอบ</span>`;
@@ -367,9 +1171,9 @@ function mcqCard(lesson, m, i) {
     if (revealed) hint = `<div class="feedback ${st.solved ? "correct" : "incorrect"}"><span class="who">${st.solved ? "ถูก เพราะ" : "เฉลย"}</span>${esc(m.why)}</div>`;
     el.innerHTML = `
       <div class="qhead"><div><div class="qtag">self-check ${i + 1}</div><p class="qtext">${esc(m.q)}</p></div>${chip}</div>
-      <div class="opts">${m.opts.map((o, j) => {
+      <div class="opts">${order.map((j, pos) => {
         const cls = st.wrong.includes(j) ? "wrong" : (revealed && j === m.a) ? "right" : "";
-        return `<button class="opt ${cls}" data-j="${j}" ${revealed || st.wrong.includes(j) ? "disabled" : ""}><span class="k">${"ABCD"[j]}</span><span>${esc(o)}</span></button>`;
+        return `<button class="opt ${cls}" data-j="${j}" ${revealed || st.wrong.includes(j) ? "disabled" : ""}><span class="k">${"ABCD"[pos]}</span><span>${esc(m.opts[j])}</span></button>`;
       }).join("")}</div>
       ${hint}
       ${revealed ? `<div class="actions"><button class="btn ghost" data-reset>ลองใหม่ตั้งแต่ต้น</button></div>` : ""}`;
