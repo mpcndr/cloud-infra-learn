@@ -70,9 +70,25 @@ background job (ย่อรูปช้า ไม่ควรให้ user ร
 - **M6 (จบ Phase 16–19):** รันบน Kubernetes, ออกแบบ HA/DR พร้อมตัวเลข RTO/RPO, ประเมิน cost ได้
 - **M7 (จบ Phase 20–22):** รับโจทย์ระบบ 1 ล้าน user แล้วออกแบบ–สร้าง–ดูแล–อธิบายเหตุผลได้เอง
 
-## บทเรียน
+## บทเรียน — Milestone 1 (Phase 0–3)
 
-- [Lesson 1 — โปรแกรมรันอยู่ แต่ทำไมคนอื่นเข้าไม่ได้? (Process, Port, Socket)](lessons/01-process-port-socket/README.md)
+แอป Pixbin ที่ใช้ตลอด Milestone 1 อยู่ใน [`pixbin/`](pixbin/main.go)
+
+| บท | หัวข้อ | Phase |
+|---|---|---|
+| [L01](lessons/01-process-port-socket/README.md) | โปรแกรมรันอยู่ แต่ทำไมคนอื่นเข้าไม่ได้ (Process, Port, Socket) | 0 |
+| [L02](lessons/02-inside-the-machine/README.md) | ข้างในเครื่องมีอะไร: CPU, RAM, Disk, Kernel | 0 |
+| [L03](lessons/03-process-lifecycle/README.md) | Process เกิด อยู่ ตายอย่างไร (signals, exit code, Linux VM) | 1 |
+| [L04](lessons/04-files-users-permissions/README.md) | Filesystem, Users, Permissions | 1 |
+| [L05](lessons/05-systemd-and-logs/README.md) | systemd, Service และ Logs | 1 |
+| [L06](lessons/06-when-resources-run-out/README.md) | เมื่อทรัพยากรหมด: OOM, disk เต็ม, CPU, fd | 1 |
+| [L07](lessons/07-ip-subnet-routing/README.md) | IP, Subnet และ Routing | 2 |
+| [L08](lessons/08-nat-and-firewall/README.md) | NAT และ Firewall | 2 |
+| [L09](lessons/09-tcp-and-udp/README.md) | TCP และ UDP | 2 |
+| [L10](lessons/10-dns/README.md) | DNS | 3 |
+| [L11](lessons/11-http-and-reverse-proxy/README.md) | HTTP และ Reverse Proxy (nginx) | 3 |
+| [L12](lessons/12-tls-https/README.md) | TLS และ HTTPS | 3 |
+| [L13](lessons/13-milestone-1-capstone/README.md) | Milestone 1 Capstone + incident drills | 0–3 |
 
 ## สมุดเรียน (Infra Notebook)
 
