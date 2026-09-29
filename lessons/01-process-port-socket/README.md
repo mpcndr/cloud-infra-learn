@@ -129,6 +129,25 @@ HTTPServer((HOST, PORT), Handler).serve_forever()  # ← ข้างในค�
 
 เปิด terminal 2 หน้าต่าง เรียกว่า **T1** และ **T2**
 
+**จะใช้ Python หรือ Go ก็ได้** — `main.go` ทำงานเหมือน `app.py` ทุกอย่าง
+ถ้าใช้ Go ให้ `go build -o pixbin main.go` แล้วรัน `./pixbin` (ใช้แทน `python3 app.py` ในทุกข้อ)
+อย่าใช้ `go run` ใน lab นี้ เพราะ `go run` จะ compile แล้วสร้าง process ลูกขึ้นมาอีกตัว คุณจะได้ 2 PID ซ้อนกัน
+(ลองดูด้วย `ps` ก็ได้ว่ามันเป็นแบบนั้นจริงไหม)
+
+**คำสั่งตามแต่ละ OS**
+
+| ทำอะไร | macOS | Windows (PowerShell) |
+|---|---|---|
+| ดู process | `ps -p <PID> -o pid,ppid,user,rss,etime,command` | `Get-Process -Id <PID>` |
+| ใครฟัง port ไหน | `lsof -nP -iTCP -sTCP:LISTEN` | `Get-NetTCPConnection -State Listen -LocalPort 8000` |
+| IP ใน LAN | `ipconfig getifaddr en0` | `ipconfig` (ดู IPv4 Address) |
+| ฆ่า process | `kill <PID>` | `Stop-Process -Id <PID>` |
+| แช่แข็ง / ปลุก | `kill -STOP` / `kill -CONT` | ไม่มี command ในตัว → ทำข้อ 8 บน Mac |
+| curl | มีอยู่แล้ว | ใช้ `curl.exe` (คำว่า `curl` ใน PowerShell เป็น alias ของคำสั่งอื่น) |
+
+แนะนำให้ทำ lab ชุดนี้บน **Mac** เป็นหลัก เพราะคำสั่งเกือบทั้งหมดเหมือนของ Linux
+แต่ต้องรู้ไว้ว่า macOS **ไม่ใช่ Linux** (kernel เป็นตระกูล BSD) — ถึง Phase 1 เราจะใช้ Linux จริงบน VM
+
 ### ข้อ 1 — รัน app
 ```bash
 # T1
