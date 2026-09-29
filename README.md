@@ -73,3 +73,9 @@ background job (ย่อรูปช้า ไม่ควรให้ user ร
 ## บทเรียน
 
 - [Lesson 1 — โปรแกรมรันอยู่ แต่ทำไมคนอื่นเข้าไม่ได้? (Process, Port, Socket)](lessons/01-process-port-socket/README.md)
+
+## สมุดเรียน (Infra Notebook)
+
+หน้าเว็บรวมทุกบท มี lab, self-check และ quiz ที่ส่งให้ Claude ตรวจได้:
+https://claude.ai/artifact/DiYo3dLeSk8N8ia6GP1Z3k
+(ซอร์สของหน้าอยู่ที่ `notebook/index.html`)

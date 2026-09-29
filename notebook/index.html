@@ -1,0 +1,506 @@
+<title>Infra Notebook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: lesson rail on the left (stacks on phones), one scrolling lesson sheet on the right; each question is a card that carries its own status chip. */
+:root {
+  --bg: #eef2f3;
+  --sheet: #fbfcfc;
+  --ink: #17252d;
+  --muted: #5b6d77;
+  --line: #d3dde1;
+  --accent: #0d6b86;
+  --accent-soft: #dbeef3;
+  --term-bg: #16232b;
+  --term-fg: #d7e6ec;
+  --term-dim: #7f99a5;
+  --ok: #1f7a4a;   --ok-soft: #dcf1e5;
+  --warn: #9a6200; --warn-soft: #fbeccc;
+  --bad: #b2362b;  --bad-soft: #f8dfdc;
+  --f-display: "Bai Jamjuree", "IBM Plex Sans Thai", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans Thai", "Noto Sans Thai", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f171c; --sheet: #152028; --ink: #dde8ec; --muted: #93a8b2; --line: #2a3a44;
+  --accent: #5cc3df; --accent-soft: #173744; --term-bg: #0a1115; --term-fg: #d7e6ec; --term-dim: #6f8995;
+  --ok: #6fd39c; --ok-soft: #173427; --warn: #f0b75a; --warn-soft: #3a2c12; --bad: #f08a80; --bad-soft: #3d1c19;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f171c; --sheet: #152028; --ink: #dde8ec; --muted: #93a8b2; --line: #2a3a44;
+  --accent: #5cc3df; --accent-soft: #173744; --term-bg: #0a1115; --term-fg: #d7e6ec; --term-dim: #6f8995;
+  --ok: #6fd39c; --ok-soft: #173427; --warn: #f0b75a; --warn-soft: #3a2c12; --bad: #f08a80; --bad-soft: #3d1c19;
+  color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15.5px; line-height: 1.7; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 24px 64px; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 18px; } }
+
+/* rail */
+.rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); display: grid; gap: 14px; }
+@media (max-width: 860px) { .rail { position: static; } }
+.brand { font-family: var(--f-display); font-weight: 700; font-size: 1.35rem; letter-spacing: .01em; line-height: 1.2; }
+.brand small { display: block; font-family: var(--f-mono); font-weight: 400; font-size: .72rem; color: var(--muted); letter-spacing: .04em; margin-top: 4px; }
+.lessons { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.lessons button { width: 100%; text-align: left; background: none; border: 0; border-left: 2px solid var(--line); padding: 8px 12px; color: var(--ink); font: inherit; cursor: pointer; display: grid; gap: 1px; }
+.lessons button:hover:not(:disabled) { background: var(--accent-soft); }
+.lessons button[aria-current="true"] { border-left-color: var(--accent); background: var(--accent-soft); }
+.lessons button:disabled { color: var(--muted); cursor: default; }
+.lessons .code { font-family: var(--f-mono); font-size: .72rem; color: var(--muted); letter-spacing: .05em; }
+.lessons .name { font-size: .92rem; line-height: 1.45; }
+.lessons .count { font-family: var(--f-mono); font-size: .7rem; color: var(--warn); }
+.status-box { border: 1px solid var(--line); background: var(--sheet); padding: 12px 14px; font-size: .86rem; display: grid; gap: 8px; border-radius: 6px; }
+.status-box .row { display: flex; justify-content: space-between; gap: 8px; font-variant-numeric: tabular-nums; }
+.status-box .note { color: var(--muted); font-size: .8rem; line-height: 1.55; }
+
+/* sheet */
+.sheet { background: var(--sheet); border: 1px solid var(--line); border-radius: 8px; padding-inline: clamp(16px, 4vw, 44px); padding-block: 32px 40px; min-width: 0; }
+.eyebrow { font-family: var(--f-mono); font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--f-display); font-size: clamp(1.6rem, 3.4vw, 2.2rem); line-height: 1.25; margin: 6px 0 10px; text-wrap: balance; }
+h2 { font-family: var(--f-display); font-size: 1.3rem; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-size: 1rem; margin: 0; font-weight: 600; }
+.lede { color: var(--muted); max-width: 65ch; margin: 0; }
+.jump { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 8px; }
+.jump a { font-size: .82rem; color: var(--accent); text-decoration: none; border: 1px solid var(--line); padding: 3px 10px; border-radius: 999px; }
+.jump a:hover { border-color: var(--accent); }
+section.block { border-top: 1px solid var(--line); padding-top: 26px; margin-top: 30px; }
+.prose { max-width: 68ch; }
+.prose p { margin: 0 0 10px; }
+.prose ul { margin: 0 0 10px; padding-left: 1.2em; }
+.prose li { margin-bottom: 4px; }
+code { font-family: var(--f-mono); font-size: .88em; background: var(--accent-soft); padding: 1px 5px; border-radius: 3px; }
+.caveat { border: 1px dashed var(--warn); background: var(--warn-soft); padding: 10px 14px; border-radius: 6px; font-size: .9rem; max-width: 68ch; }
+pre.term { background: var(--term-bg); color: var(--term-fg); font-family: var(--f-mono); font-size: .8rem; line-height: 1.55; padding: 14px 16px; border-radius: 6px; overflow-x: auto; margin: 8px 0 12px; }
+pre.term .c { color: var(--term-dim); }
+.srclink { font-size: .86rem; color: var(--muted); }
+.srclink a { color: var(--accent); }
+
+/* lab */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; counter-reset: step; }
+.step { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; }
+.step input[type="checkbox"] { width: 18px; height: 18px; margin-top: 4px; accent-color: var(--accent); }
+.step .body { min-width: 0; }
+.step p { margin: 2px 0 0; color: var(--muted); font-size: .9rem; }
+.step.done h3 { text-decoration: line-through; color: var(--muted); }
+
+/* questions */
+.qlist { display: grid; gap: 16px; }
+.q { border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; display: grid; gap: 10px; min-width: 0; }
+.qhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.qtag { font-family: var(--f-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.qtext { margin: 2px 0 0; font-weight: 500; max-width: 68ch; }
+.chip { font-size: .76rem; padding: 2px 10px; border-radius: 999px; white-space: nowrap; border: 1px solid var(--line); color: var(--muted); }
+.chip.pending { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.chip.correct { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.chip.partial { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.chip.incorrect { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+.chip.hint { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+textarea { width: 100%; min-height: 110px; resize: vertical; font-family: var(--f-body); font-size: .93rem; line-height: 1.6; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+textarea.mono { font-family: var(--f-mono); font-size: .8rem; }
+textarea:focus-visible, button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.btn { font: inherit; font-size: .88rem; font-weight: 500; padding: 6px 16px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--sheet); cursor: pointer; }
+.btn.ghost { background: none; color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: default; }
+.hint-text { font-size: .82rem; color: var(--muted); }
+.feedback { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: .92rem; white-space: pre-wrap; }
+.feedback.correct { border-left-color: var(--ok); background: var(--ok-soft); }
+.feedback.partial { border-left-color: var(--warn); background: var(--warn-soft); }
+.feedback.incorrect { border-left-color: var(--bad); background: var(--bad-soft); }
+.feedback .who { font-family: var(--f-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; display: block; margin-bottom: 4px; color: var(--muted); }
+.feedback.stale { opacity: .7; }
+
+/* mcq */
+.opts { display: grid; gap: 6px; }
+.opt { text-align: left; font: inherit; font-size: .92rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; cursor: pointer; display: flex; gap: 10px; }
+.opt .k { font-family: var(--f-mono); color: var(--muted); }
+.opt:hover:not(:disabled) { border-color: var(--accent); }
+.opt:disabled { cursor: default; }
+.opt.wrong { border-color: var(--bad); background: var(--bad-soft); color: var(--muted); text-decoration: line-through; }
+.opt.right { border-color: var(--ok); background: var(--ok-soft); }
+
+.banner { border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; font-size: .88rem; background: var(--bg); margin-top: 16px; }
+.banner.off { border-color: var(--warn); background: var(--warn-soft); }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+@media (prefers-reduced-motion: no-preference) { .q { transition: border-color .2s; } }
+</style>
+
+<div class="wrap">
+  <aside class="rail">
+    <div class="brand">Infra Notebook<small>CLOUD / INFRA · FROM ZERO</small></div>
+    <ul class="lessons" id="lessonList"></ul>
+    <div class="status-box" id="statusBox">
+      <div class="row"><span>ส่งแล้ว รอ Claude ตรวจ</span><b id="stPending">0</b></div>
+      <div class="row"><span>ตรวจแล้ว</span><b id="stReviewed">0</b></div>
+      <div class="note" id="stNote">กด “ส่งให้ Claude ตรวจ” ในแต่ละข้อ แล้วกลับไปบอกในแชทว่า “ส่งแล้ว” ผลตรวจจะขึ้นใต้คำตอบของคุณในหน้านี้</div>
+    </div>
+  </aside>
+
+  <main class="sheet" id="sheet"></main>
+</div>
+
+<script>
+const REPO = "https://github.com/mpcndr/cloud-infra-learn/blob/claude/upbeat-turing-fhattt/";
+
+const COURSE = [
+  {
+    id: "L00", code: "BASELINE", phase: "ก่อนเริ่ม",
+    title: "พิมพ์ google.com แล้วเกิดอะไรขึ้น",
+    lede: "จุดตั้งต้นของคุณ ตอบด้วยสิ่งที่รู้ตอนนี้ ห้ามค้น ตอบว่า “ไม่รู้” ได้ คำถามชุดนี้จะกลับมาอีกครั้งตอนจบ Milestone 1 เพื่อเทียบว่าเข้าใจลึกขึ้นแค่ไหน",
+    quiz: [
+      { id: "b1", tag: "baseline", q: "browser รู้ได้อย่างไรว่า google.com คือเครื่องไหน (การส่งของไปถึงเครื่องต้องมี IP)" },
+      { id: "b2", tag: "baseline", q: "“ยิงไป” คือยิงไปที่ port อะไร ใครเป็นคนตัดสินใจเลขนั้น ในเมื่อ URL ไม่ได้บอก port" },
+      { id: "b3", tag: "baseline", q: "ก่อนส่ง HTML ได้แม้แต่ byte แรก สองเครื่องต้องทำอะไรกันก่อน" },
+      { id: "b4", tag: "baseline", q: "https:// เพิ่มขั้นตอนอะไรเข้ามา และเกิดก่อนหรือหลัง HTTP request" },
+      { id: "b5", tag: "baseline", q: "ได้ HTML กลับมาแล้ว จบหรือยัง ลองนึกถึงหน้าเว็บที่มีรูป 20 รูป" }
+    ]
+  },
+  {
+    id: "L01", code: "LESSON 01", phase: "Phase 0 · Computer & Internet",
+    title: "โปรแกรมรันอยู่ แต่ทำไมคนอื่นเข้าไม่ได้",
+    lede: "Process, Port, Socket และความต่างระหว่าง “connection refused” กับ “timeout” ซึ่งเป็นเครื่องมือ debug ตัวแรกที่ใช้ไปตลอดคอร์ส",
+    source: "lessons/01-process-port-socket/README.md",
+    overview: `
+      <p><b>ปัญหา:</b> รัน app แล้วเปิด <code>localhost:8000</code> ได้ แต่ส่งลิงก์ให้เพื่อน เพื่อนเปิดไม่ได้</p>
+      <ul>
+        <li><b>Program</b> คือไฟล์บน disk · <b>Process</b> คือ program ที่กำลังรัน มีเลข <b>PID</b></li>
+        <li>process แตะ network เองไม่ได้ ต้องขอ <b>kernel</b> ผ่าน system call และได้ <b>socket</b> กลับมาใช้</li>
+        <li>IP เป็นของ <b>network interface</b> ไม่ใช่ของเครื่อง: <code>127.0.0.1</code> ออกนอกเครื่องไม่ได้, <code>0.0.0.0</code> = ทุก interface</li>
+        <li>ลำดับ system call ของทุก server: <code>socket → bind → listen → accept</code></li>
+        <li><b>TCP handshake ทำโดย kernel</b> ดังนั้น “connect ได้” ไม่ได้แปลว่า “app ดี”</li>
+        <li><b>Refused</b> = ถึงเครื่องแล้วแต่ไม่มีใครฟัง (kernel ส่ง RST ทันที) · <b>Timeout</b> = มีอะไรกั้น หรือ app ค้าง</li>
+      </ul>
+      <div class="caveat">Analogy ตึกสำนักงาน (IP = ที่อยู่ตึก, port = เลขห้อง, kernel = แผนกต้อนรับ) ใช้ได้แค่ให้เห็นภาพ ของจริงตึกหนึ่งมีที่อยู่ได้หลายอัน เพราะ IP เป็นของ interface และนั่นคือต้นเหตุของปัญหาในบทนี้</div>`,
+    diagram:
+`<span class="c"> เพื่อน (192.168.1.35)            เครื่องคุณ</span>
+ browser ──packet──────────►  kernel socket table
+ dst=192.168.1.20:8000          127.0.0.1:8000     LISTEN → PID 547 (pixbin)
+                                192.168.1.20:8000  ไม่มีใครฟัง
+         ◄──── RST ──────────   → "connection refused"
+
+<span class="c"> localhost:8000 จากเครื่องตัวเอง → เข้าทาง loopback → เจอ socket → ได้คำตอบ</span>`,
+    lab: [
+      { id: "s1", title: "รัน app", cmd: "go build -o pixbin main.go\n./pixbin", note: "จด PID ไว้ (หรือใช้ python3 app.py)" },
+      { id: "s2", title: "เรียกมันสองครั้ง", cmd: "curl http://127.0.0.1:8000\ncurl http://127.0.0.1:8000", note: "ดูบรรทัด you came from: port เปลี่ยนไหม เพราะอะไร" },
+      { id: "s3", title: "ดู process", cmd: "ps -p <PID> -o pid,ppid,user,rss,etime,command", note: "เดาก่อนรันว่า ppid คือ process อะไร" },
+      { id: "s4", title: "ใครฟัง port ไหน", cmd: "lsof -nP -iTCP -sTCP:LISTEN", note: "ต้องเห็น 127.0.0.1:8000 กับ PID เดียวกับข้อ 1" },
+      { id: "s5", title: "แย่ง port", cmd: "./pixbin        # ใน terminal ที่สอง", note: "ได้ address already in use เขียน hypothesis ก่อน แล้วพิสูจน์ด้วยข้อ 4" },
+      { id: "s6", title: "process ตาย", cmd: "kill <PID>\ncurl -m 3 http://127.0.0.1:8000", note: "สังเกตว่า error ขึ้นเร็วแค่ไหน" },
+      { id: "s7", title: "ให้เครื่องอื่นเข้า", cmd: "ipconfig getifaddr en0\nHOST=0.0.0.0 ./pixbin", note: "ลองจากมือถือทั้งก่อนและหลังเปลี่ยน HOST" },
+      { id: "s8", title: "process ยังอยู่ แต่ไม่ตอบ", cmd: "kill -STOP <PID>\ncurl -m 3 http://127.0.0.1:8000\nkill -CONT <PID>", note: "ข้อสำคัญที่สุด เทียบกับผลของข้อ 6" }
+    ],
+    labSubmit: [
+      { id: "lab2", tag: "lab · ข้อ 2", q: "วาง output ของข้อ 2 แล้วอธิบายว่าทำไม client port ถึงเป็นแบบนั้น", mono: true },
+      { id: "lab5", tag: "lab · ข้อ 5", q: "วาง error ของข้อ 5 พร้อม hypothesis ที่คุณตั้ง และ output ที่ใช้พิสูจน์", mono: true },
+      { id: "lab68", tag: "lab · ข้อ 6 + 8", q: "วาง output ของข้อ 6 และ 8 แล้วอธิบายว่าทำไมข้อ 6 error ทันที แต่ข้อ 8 รอจนหมดเวลา", mono: true }
+    ],
+    mcq: [
+      { id: "m1", q: "app bind ไว้ที่ 127.0.0.1:8000 เพื่อนใน Wi-Fi เดียวกันเรียก http://192.168.1.20:8000 จะเห็นอะไร",
+        opts: ["รอจน timeout", "connection refused ทันที", "ได้หน้าเว็บปกติ", "HTTP 404 Not Found"], a: 1,
+        hints: ["packet ของเพื่อนไปถึงเครื่องคุณจริงไหม ถ้าถึง ใครเป็นคนรับมันก่อน", "kernel ดูที่ (IP ปลายทาง, port ปลายทาง) คู่นี้มี socket ไหน listen อยู่บ้าง ถ้าไม่มี kernel ทำอะไร"],
+        why: "packet ถึงเครื่องแล้ว แต่ไม่มี socket ไหนฟังที่ 192.168.1.20:8000 kernel จึงตอบ RST กลับทันที เลยได้ refused ส่วน 404 เป็นคำตอบระดับ HTTP ซึ่งต้องมี app รับ request ก่อนถึงจะตอบแบบนั้นได้" },
+      { id: "m2", q: "process ถูก kill -STOP แล้วรัน curl -m 3 ไปที่ port ของมัน เกิดอะไรขึ้น",
+        opts: ["connection refused ทันที", "connect สำเร็จ แต่รอจนหมด 3 วินาทีโดยไม่ได้ข้อมูล", "ได้ HTTP 500", "port ถูกปล่อยให้คนอื่นใช้ได้"], a: 1,
+        hints: ["process ถูกแช่แข็ง แต่ยังไม่ตาย แล้ว socket ยังเป็นของมันไหม", "TCP handshake ใครเป็นคนทำ app หรือ kernel"],
+        why: "socket ยังอยู่ kernel จึงทำ handshake และรับ connection เข้าคิวแทน app ได้ แต่ app ถูกแช่แข็งเลยไม่ accept และไม่ตอบ curl จึงได้ 0 bytes จนหมดเวลา นี่คือเหตุผลที่ health check ต้องส่ง request จริง ไม่ใช่แค่เช็คว่า port เปิดอยู่" },
+      { id: "m3", q: "ทำไมบรรทัด you came from: ถึงได้ port ไม่ซ้ำกันในแต่ละครั้งที่ curl",
+        opts: ["server สุ่ม port ให้ client", "kernel ฝั่ง client เลือก ephemeral port ใหม่ให้ทุก connection", "curl ใช้ port 80 เสมอแต่ router เปลี่ยนให้", "เป็นเลข PID ของ curl"], a: 1,
+        hints: ["connection หนึ่งเส้นถูกระบุด้วยค่า 4 ตัว ตัวไหนเป็นของฝั่ง client", "ใครเปิด socket ฝั่ง client และใครเลือกเลขให้มัน"],
+        why: "connection ถูกระบุด้วย (client IP, client port, server IP, server port) ฝั่ง client ไม่ได้ bind port เอง kernel ของ client จึงเลือกเลขว่าง ๆ ให้ (ephemeral port) ทำให้ server port เดียวแยกได้หลายพัน connection" },
+      { id: "m4", q: "error “address already in use” เกิดขึ้นตอน system call ไหน",
+        opts: ["socket()", "bind()", "listen()", "accept()"], a: 1,
+        hints: ["error นี้บอกว่า “คู่ IP:port นี้มีคนจองแล้ว” system call ไหนเป็นตัวจอง", "socket() แค่สร้าง handle ยังไม่ผูกกับที่อยู่ใด ๆ"],
+        why: "bind() คือขั้นที่ผูก socket กับ (IP, port) ถ้ามี socket อื่นถือคู่นั้นอยู่ kernel จะปฏิเสธด้วย EADDRINUSE" },
+      { id: "m5", q: "firewall ระหว่างทาง drop packet ทิ้งเงียบ ๆ client จะเห็นอะไร",
+        opts: ["connection refused ทันที", "timeout", "HTTP 403 Forbidden", "DNS error"], a: 1,
+        hints: ["refused เกิดจากมีคนส่งอะไรบางอย่างกลับมา แล้วในกรณีนี้มีใครส่งอะไรกลับไหม", "packet ไม่เคยไปถึง kernel ของ server เลย"],
+        why: "packet ถูกทิ้งก่อนถึงเครื่อง จึงไม่มีใครส่ง RST กลับ client ส่ง SYN ซ้ำแล้วรอจนหมดเวลา ถ้าเห็น refused แปลว่าไปถึงเครื่องแล้ว แต่ถ้าเห็น timeout ให้สงสัย firewall หรือ route ก่อน" }
+    ],
+    quiz: [
+      { id: "q1", tag: "เข้าใจ", q: "ถ้าให้ทุก process แตะ network card ได้ตรง ๆ โดยไม่ผ่าน kernel จะเกิดปัญหาอะไรบ้าง" },
+      { id: "q2", tag: "ประยุกต์", q: "app ฟังแค่ port 8000 ทำไมรับ user พร้อมกัน 1,000 คนได้ แล้ว kernel แยก response ของแต่ละคนออกจากกันอย่างไร" },
+      { id: "q3", tag: "debugging", q: "user รายงานสองแบบ: A “error ทันที” และ B “หมุน 30 วินาทีแล้ว error” แต่ละแบบคุณสงสัยอะไร และตรวจอะไรเป็นอย่างแรก" },
+      { id: "q4", tag: "debugging", q: "SSH เข้า server แล้ว curl localhost:8000 ได้ปกติ แต่ข้างนอกเข้าไม่ได้ ตั้ง hypothesis อย่างน้อย 3 ข้อ เรียงลำดับที่ควรตรวจ และบอกว่าพิสูจน์แต่ละข้อด้วยอะไร" },
+      { id: "q5", tag: "trade-off", q: "ทีมเสนอว่า “bind ทุก service เป็น 0.0.0.0 ไปเลย จะได้ไม่มีปัญหาเข้าไม่ได้” คุณเห็นด้วยไหม และจะเสนออะไรแทน" }
+    ],
+    challenge: [
+      { id: "c1", tag: "challenge 1", q: "รัน Pixbin 2 instance ให้ตัวหนึ่งเข้าได้จาก LAN อีกตัวเข้าได้เฉพาะในเครื่อง พิสูจน์ด้วย output", mono: true },
+      { id: "c2", tag: "challenge 2+3", q: "วาง check.sh ที่พิมพ์ UP / REFUSED / TIMEOUT และ output ที่แสดงว่าทำให้เกิดครบทั้ง 3 สถานะ", mono: true },
+      { id: "c3", tag: "challenge 4", q: "รัน app ที่ port 80 ด้วย user ปกติ ได้ error อะไร เพราะอะไร และมีวิธีไหนที่ไม่ต้องรันเป็น root" }
+    ]
+  },
+  { id: "L02", code: "LESSON 02", locked: true, title: "ทำไมปิด terminal แล้ว app ตาย" },
+  { id: "L03", code: "LESSON 03", locked: true, title: "Linux: user, permission, filesystem" },
+  { id: "L04", code: "LESSON 04", locked: true, title: "IP, subnet และ packet เดินทางอย่างไร" }
+];
+
+const VERDICT = {
+  correct: "ถูก", partial: "ถูกบางส่วน", incorrect: "ยังไม่ถูก", hint: "มีใบ้เพิ่ม"
+};
+
+/* ---------- state ---------- */
+const answers = new Map();   // key -> data
+const feedback = new Map();  // key -> data
+let db = null;
+let dbState = "connecting";  // connecting | on | off
+let current = "L01";
+
+const ls = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} }
+};
+current = ls.get("infra:lesson") || current;
+if (!COURSE.find(l => l.id === current && !l.locked)) current = "L01";
+
+const keyOf = (lesson, qid) => `${lesson}__${qid}`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function statusOf(key) {
+  const a = answers.get(key), f = feedback.get(key);
+  if (!a) return { kind: "none" };
+  if (f && (!f.answerSubmittedAt || f.answerSubmittedAt >= a.submittedAt)) return { kind: f.verdict || "hint", f };
+  return { kind: "pending", f };
+}
+
+/* ---------- rail ---------- */
+function renderRail() {
+  const list = document.getElementById("lessonList");
+  list.innerHTML = "";
+  for (const l of COURSE) {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.disabled = !!l.locked;
+    b.setAttribute("aria-current", String(l.id === current));
+    const pend = [...answers.keys()].filter(k => k.startsWith(l.id + "__") && statusOf(k).kind === "pending").length;
+    b.innerHTML = `<span class="code">${esc(l.code)}${l.locked ? " · ยังไม่เปิด" : ""}</span><span class="name">${esc(l.title)}</span>${pend ? `<span class="count">รอตรวจ ${pend}</span>` : ""}`;
+    b.addEventListener("click", () => { current = l.id; ls.set("infra:lesson", current); renderRail(); renderLesson(); window.scrollTo({ top: 0 }); });
+    li.appendChild(b); list.appendChild(li);
+  }
+  let p = 0, r = 0;
+  for (const k of answers.keys()) { const s = statusOf(k).kind; if (s === "pending") p++; else if (s !== "none") r++; }
+  document.getElementById("stPending").textContent = p;
+  document.getElementById("stReviewed").textContent = r;
+}
+
+/* ---------- open question card ---------- */
+function openQuestion(lesson, item) {
+  const key = keyOf(lesson.id, item.id);
+  const el = document.createElement("div");
+  el.className = "q"; el.id = "q-" + key;
+  el.innerHTML = `
+    <div class="qhead">
+      <div><div class="qtag">${esc(item.tag)}</div><p class="qtext">${esc(item.q)}</p></div>
+      <span class="chip" data-chip>ยังไม่ตอบ</span>
+    </div>
+    <label class="hint-text" for="ta-${key}">คำตอบของคุณ</label>
+    <textarea id="ta-${key}" class="${item.mono ? "mono" : ""}" placeholder="${item.mono ? "วาง output และเขียนคำอธิบาย" : "อธิบายด้วยภาษาของคุณเอง พร้อมเหตุผล"}"></textarea>
+    <div class="actions">
+      <button class="btn" data-send>ส่งให้ Claude ตรวจ</button>
+      <span class="hint-text" data-msg></span>
+    </div>
+    <div data-fb></div>`;
+  const ta = el.querySelector("textarea");
+  const draft = ls.get("infra:draft:" + key);
+  if (draft !== null) ta.value = draft;
+  else if (answers.get(key)) ta.value = answers.get(key).text || "";
+  let t;
+  ta.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => ls.set("infra:draft:" + key, ta.value), 400); });
+  el.querySelector("[data-send]").addEventListener("click", () => submit(lesson, item, ta, el));
+  paintQuestion(el, key);
+  return el;
+}
+
+function paintQuestion(el, key) {
+  const s = statusOf(key);
+  const chip = el.querySelector("[data-chip]");
+  chip.className = "chip";
+  if (s.kind === "none") chip.textContent = "ยังไม่ตอบ";
+  else if (s.kind === "pending") { chip.classList.add("pending"); chip.textContent = "ส่งแล้ว รอตรวจ"; }
+  else { chip.classList.add(s.kind); chip.textContent = VERDICT[s.kind] || "ตรวจแล้ว"; }
+  const fb = el.querySelector("[data-fb]");
+  const f = s.f;
+  if (f && f.note) {
+    const stale = s.kind === "pending";
+    fb.innerHTML = `<div class="feedback ${esc(f.verdict || "")} ${stale ? "stale" : ""}"><span class="who">${stale ? "ผลตรวจรอบก่อน" : "Claude"}${f.level ? " · ใบ้ระดับ " + esc(f.level) : ""}</span>${esc(f.note)}</div>`;
+  } else fb.innerHTML = "";
+  const ta = el.querySelector("textarea");
+  if (!ta.value && answers.get(key) && ls.get("infra:draft:" + key) === null) ta.value = answers.get(key).text || "";
+  const btn = el.querySelector("[data-send]");
+  btn.disabled = dbState !== "on";
+  btn.textContent = answers.get(key) ? "ส่งคำตอบใหม่" : "ส่งให้ Claude ตรวจ";
+}
+
+async function submit(lesson, item, ta, el) {
+  const msg = el.querySelector("[data-msg]");
+  const text = ta.value.trim();
+  if (!text) { msg.textContent = "ยังไม่มีคำตอบ พิมพ์ก่อนแล้วค่อยส่ง"; return; }
+  if (!db) { msg.textContent = "หน้านี้บันทึกไม่ได้ตอนนี้ ใช้ปุ่มคัดลอกคำตอบทั้งหมดด้านบน แล้ววางในแชทแทน"; return; }
+  const key = keyOf(lesson.id, item.id);
+  const btn = el.querySelector("[data-send]");
+  btn.disabled = true; msg.textContent = "กำลังส่ง…";
+  try {
+    await db.doc("answers/" + key).set({
+      lesson: lesson.id, qid: item.id, tag: item.tag, question: item.q, text,
+      submittedAt: new Date().toISOString()
+    });
+    msg.textContent = "ส่งแล้ว กลับไปบอกในแชทว่า “ส่งแล้ว” ได้เลย";
+  } catch (e) {
+    msg.textContent = e && e.code === "quota_exceeded" ? "พื้นที่เก็บคำตอบเต็ม บอก Claude ในแชทให้ช่วยล้างของเก่า" : "ส่งไม่สำเร็จ ลองกดอีกครั้ง ถ้ายังไม่ได้ ให้คัดลอกไปวางในแชท";
+  } finally { btn.disabled = false; }
+}
+
+/* ---------- MCQ ---------- */
+function mcqCard(lesson, m, i) {
+  const key = "infra:mcq:" + keyOf(lesson.id, m.id);
+  let st; try { st = JSON.parse(ls.get(key) || "null"); } catch { st = null; }
+  st = st || { wrong: [], solved: false };
+  const el = document.createElement("div");
+  el.className = "q";
+  const draw = () => {
+    const revealed = st.solved || st.wrong.length >= 3;
+    const chip = st.solved ? `<span class="chip correct">ถูก</span>` : st.wrong.length >= 3 ? `<span class="chip incorrect">ดูเฉลยแล้ว</span>` : st.wrong.length ? `<span class="chip partial">ลองอีกครั้ง</span>` : `<span class="chip">ยังไม่ตอบ</span>`;
+    let hint = "";
+    if (!revealed && st.wrong.length === 1) hint = `<div class="feedback partial"><span class="who">ใบ้ระดับ 1</span>${esc(m.hints[0])}</div>`;
+    if (!revealed && st.wrong.length === 2) hint = `<div class="feedback partial"><span class="who">ใบ้ระดับ 2</span>${esc(m.hints[1])}</div>`;
+    if (revealed) hint = `<div class="feedback ${st.solved ? "correct" : "incorrect"}"><span class="who">${st.solved ? "ถูก เพราะ" : "เฉลย"}</span>${esc(m.why)}</div>`;
+    el.innerHTML = `
+      <div class="qhead"><div><div class="qtag">self-check ${i + 1}</div><p class="qtext">${esc(m.q)}</p></div>${chip}</div>
+      <div class="opts">${m.opts.map((o, j) => {
+        const cls = st.wrong.includes(j) ? "wrong" : (revealed && j === m.a) ? "right" : "";
+        return `<button class="opt ${cls}" data-j="${j}" ${revealed || st.wrong.includes(j) ? "disabled" : ""}><span class="k">${"ABCD"[j]}</span><span>${esc(o)}</span></button>`;
+      }).join("")}</div>
+      ${hint}
+      ${revealed ? `<div class="actions"><button class="btn ghost" data-reset>ลองใหม่ตั้งแต่ต้น</button></div>` : ""}`;
+    el.querySelectorAll("[data-j]").forEach(b => b.addEventListener("click", () => {
+      const j = +b.dataset.j;
+      if (j === m.a) st.solved = true; else st.wrong.push(j);
+      ls.set(key, JSON.stringify(st)); draw();
+    }));
+    const r = el.querySelector("[data-reset]");
+    if (r) r.addEventListener("click", () => { st = { wrong: [], solved: false }; ls.set(key, JSON.stringify(st)); draw(); });
+  };
+  draw();
+  return el;
+}
+
+/* ---------- lesson ---------- */
+function section(id, title, intro) {
+  const s = document.createElement("section");
+  s.className = "block"; s.id = id;
+  s.innerHTML = `<h2>${esc(title)}</h2>${intro ? `<p class="lede" style="margin-bottom:14px">${intro}</p>` : ""}`;
+  return s;
+}
+
+function renderLesson() {
+  const l = COURSE.find(x => x.id === current);
+  const sheet = document.getElementById("sheet");
+  sheet.innerHTML = "";
+  const head = document.createElement("header");
+  const parts = [
+    l.overview && ["sec-overview", "สรุปบทเรียน"], l.lab && ["sec-lab", "Lab"], l.mcq && ["sec-mcq", "Self-check"],
+    l.quiz && ["sec-quiz", "Quiz เชิงเหตุผล"], l.challenge && ["sec-challenge", "Challenge"]
+  ].filter(Boolean);
+  head.innerHTML = `
+    <div class="eyebrow">${esc(l.code)} · ${esc(l.phase)}</div>
+    <h1>${esc(l.title)}</h1>
+    <p class="lede">${esc(l.lede)}</p>
+    ${parts.length > 1 ? `<nav class="jump">${parts.map(([id, t]) => `<a href="#${id}">${t}</a>`).join("")}</nav>` : ""}
+    <div class="banner ${dbState === "off" ? "off" : ""}" id="dbBanner"></div>
+    <div class="toolbar"><button class="btn ghost" id="copyAll">คัดลอกคำตอบทั้งหมดของบทนี้</button><span class="hint-text" id="copyMsg"></span></div>`;
+  sheet.appendChild(head);
+  paintBanner();
+  head.querySelector("#copyAll").addEventListener("click", () => copyAll(l));
+
+  if (l.overview) {
+    const s = section("sec-overview", "สรุปบทเรียน");
+    s.insertAdjacentHTML("beforeend", `<div class="prose">${l.overview}</div><pre class="term">${l.diagram}</pre>
+      <p class="srclink">บทเรียนฉบับเต็ม (mental model, สิ่งที่เกิดข้างใน, failure scenario, trade-off): <a href="${REPO + l.source}" target="_blank" rel="noopener">${esc(l.source)}</a></p>`);
+    sheet.appendChild(s);
+  }
+  if (l.lab) {
+    const s = section("sec-lab", "Lab", "ทำบน Mac ใน terminal 2 หน้าต่าง ติ๊กเมื่อทำเสร็จ แล้วส่ง output ของข้อที่มีกล่องให้ส่งด้านล่าง");
+    const ol = document.createElement("ol"); ol.className = "steps";
+    for (const st of l.lab) {
+      const k = "infra:lab:" + keyOf(l.id, st.id);
+      const li = document.createElement("li"); li.className = "step" + (ls.get(k) === "1" ? " done" : "");
+      li.innerHTML = `<input type="checkbox" id="cb-${l.id}-${st.id}" ${ls.get(k) === "1" ? "checked" : ""} aria-label="ทำข้อนี้เสร็จแล้ว">
+        <div class="body"><h3><label for="cb-${l.id}-${st.id}">${esc(st.title)}</label></h3><pre class="term">${esc(st.cmd)}</pre><p>${esc(st.note)}</p></div>`;
+      li.querySelector("input").addEventListener("change", e => { ls.set(k, e.target.checked ? "1" : "0"); li.classList.toggle("done", e.target.checked); });
+      ol.appendChild(li);
+    }
+    s.appendChild(ol);
+    const h = document.createElement("h2"); h.textContent = "ส่งผล Lab"; h.style.marginTop = "28px"; s.appendChild(h);
+    const box = document.createElement("div"); box.className = "qlist";
+    l.labSubmit.forEach(it => box.appendChild(openQuestion(l, it)));
+    s.appendChild(box); sheet.appendChild(s);
+  }
+  if (l.mcq) {
+    const s = section("sec-mcq", "Self-check", "ตรวจเองได้ทันที ตอบผิดจะได้ใบ้ก่อน ผิดครบ 3 ครั้งถึงจะเห็นเฉลย อย่าเดาไล่ทีละข้อ ให้คิดก่อนกด");
+    const box = document.createElement("div"); box.className = "qlist";
+    l.mcq.forEach((m, i) => box.appendChild(mcqCard(l, m, i)));
+    s.appendChild(box); sheet.appendChild(s);
+  }
+  if (l.quiz) {
+    const s = section("sec-quiz", l.overview ? "Quiz เชิงเหตุผล" : "คำถาม", "Claude ตรวจทั้งคำตอบและเหตุผลแยกกัน ถ้ายังไม่ถูกจะได้ใบ้ทีละระดับก่อน ไม่เฉลยทันที");
+    const box = document.createElement("div"); box.className = "qlist";
+    l.quiz.forEach(it => box.appendChild(openQuestion(l, it)));
+    s.appendChild(box); sheet.appendChild(s);
+  }
+  if (l.challenge) {
+    const s = section("sec-challenge", "Challenge", "ออกแบบและทำเองทั้งหมด ส่ง command, output และเหตุผลของแต่ละข้อ");
+    const box = document.createElement("div"); box.className = "qlist";
+    l.challenge.forEach(it => box.appendChild(openQuestion(l, it)));
+    s.appendChild(box); sheet.appendChild(s);
+  }
+}
+
+function paintBanner() {
+  const b = document.getElementById("dbBanner");
+  if (!b) return;
+  b.className = "banner" + (dbState === "off" ? " off" : "");
+  b.textContent = dbState === "on" ? "คำตอบที่กดส่งจะถูกบันทึกให้ Claude อ่านได้ ส่วนคำตอบที่พิมพ์ค้างไว้จะเก็บเป็นฉบับร่างในเบราว์เซอร์นี้"
+    : dbState === "off" ? "ตอนนี้หน้านี้บันทึกคำตอบให้ Claude ไม่ได้ ยังพิมพ์ได้ตามปกติ แล้วใช้ปุ่มคัดลอกคำตอบทั้งหมดไปวางในแชทแทน"
+    : "กำลังเชื่อมต่อที่เก็บคำตอบ…";
+}
+
+function repaintQuestions() {
+  document.querySelectorAll(".q[id^='q-']").forEach(el => paintQuestion(el, el.id.slice(2)));
+  renderRail();
+}
+
+async function copyAll(l) {
+  const items = [...(l.labSubmit || []), ...(l.quiz || []), ...(l.challenge || [])];
+  const text = [`${l.code}: ${l.title}`, ...items.map(it => {
+    const ta = document.getElementById("ta-" + keyOf(l.id, it.id));
+    return `\n[${it.tag}] ${it.q}\n${(ta && ta.value.trim()) || "(ยังไม่ได้ตอบ)"}`;
+  })].join("\n");
+  const msg = document.getElementById("copyMsg");
+  try { await navigator.clipboard.writeText(text); msg.textContent = "คัดลอกแล้ว"; }
+  catch {
+    const ta = document.createElement("textarea"); ta.value = text; ta.className = "mono"; ta.style.marginTop = "8px";
+    msg.textContent = "คัดลอกอัตโนมัติไม่ได้ เลือกข้อความในกล่องนี้แล้วคัดลอกเอง";
+    msg.parentElement.after(ta); ta.select();
+  }
+}
+
+/* ---------- boot ---------- */
+renderRail();
+renderLesson();
+
+(async () => {
+  try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch { db = null; }
+  if (!db) { dbState = "off"; paintBanner(); repaintQuestions(); return; }
+  dbState = "on"; paintBanner();
+  db.collection("answers").onSnapshot(snap => {
+    answers.clear(); snap.docs.forEach(d => answers.set(d.id, d.data()));
+    repaintQuestions();
+  }, () => { dbState = "off"; paintBanner(); repaintQuestions(); });
+  db.collection("feedback").onSnapshot(snap => {
+    feedback.clear(); snap.docs.forEach(d => feedback.set(d.id, d.data()));
+    repaintQuestions();
+  }, () => {});
+  repaintQuestions();
+})();
+</script>
